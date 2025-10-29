@@ -1,6 +1,6 @@
 """
-Database Initialization Script V3.0
-Populates MongoDB with dummy data
+데이터베이스 초기화 스크립트 V3.0
+MongoDB에 테스트 데이터 삽입
 """
 
 import os
@@ -9,14 +9,14 @@ import time
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError, OperationFailure
 
-# Configuration
+# 설정
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://db:27017/')
 MAX_RETRIES = 30
 RETRY_DELAY = 2
 
 def wait_for_mongodb():
-    """Wait for MongoDB to become available"""
-    print("[*] Waiting for MongoDB connection...")
+    """MongoDB가 준비될 때까지 대기"""
+    print("[*] MongoDB 연결 대기 중...")
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -26,56 +26,56 @@ def wait_for_mongodb():
                 connectTimeoutMS=2000
             )
             client.server_info()
-            print(f"[+] MongoDB connected (attempt {attempt}/{MAX_RETRIES})")
+            print(f"[+] MongoDB 연결됨 (시도 {attempt}/{MAX_RETRIES})")
             return client
 
         except ServerSelectionTimeoutError:
             if attempt < MAX_RETRIES:
-                print(f"[*] Retry in {RETRY_DELAY}s... ({attempt}/{MAX_RETRIES})")
+                print(f"[*] {RETRY_DELAY}초 후 재시도... ({attempt}/{MAX_RETRIES})")
                 time.sleep(RETRY_DELAY)
             else:
-                print(f"[!] MongoDB connection failed after {MAX_RETRIES} attempts")
+                print(f"[!] {MAX_RETRIES}회 시도 후 MongoDB 연결 실패")
                 raise
 
 def verify_javascript_enabled(db):
     """
-    CRITICAL verification - $where must work!
-    Container startup fails if JavaScript is disabled
+    중요 검증 - $where 연산자가 작동해야 함!
+    JavaScript가 비활성화되면 컨테이너 시작 실패
     """
-    print("[*] Verifying MongoDB JavaScript support...")
+    print("[*] MongoDB JavaScript 지원 검증 중...")
 
     try:
-        # Insert test document
+        # 테스트 문서 삽입
         db.test_collection.delete_many({})
         db.test_collection.insert_one({'test': True})
 
-        # Test $where operator
+        # $where 연산자 테스트
         test_results = list(db.test_collection.find({
             "$where": "function() { return this.test === true; }"
         }))
 
-        # Clean up
+        # 정리
         db.test_collection.delete_many({})
 
         if len(test_results) > 0:
-            print("[+] JavaScript execution verified ✓")
+            print("[+] JavaScript 실행 검증 완료 ✓")
             return True
         else:
-            print("[!] $where query returned no results")
+            print("[!] $where 쿼리가 결과 없이 반환됨")
             return False
 
     except OperationFailure as e:
         error_msg = str(e).lower()
 
         print("=" * 70)
-        print("[!!!] CRITICAL ERROR: MongoDB JavaScript is DISABLED!")
+        print("[!!!] 치명적 오류: MongoDB JavaScript가 비활성화됨!")
         print("=" * 70)
-        print(f"[!!!] Error: {e}")
+        print(f"[!!!] 에러: {e}")
         print()
-        print("[!!!] This CTF challenge REQUIRES JavaScript support!")
-        print("[!!!] The NoSQL injection will NOT work without it!")
+        print("[!!!] 이 CTF 문제는 JavaScript 지원이 필요합니다!")
+        print("[!!!] JavaScript 없이는 NoSQL injection이 작동하지 않습니다!")
         print()
-        print("[FIX] Add to docker-compose.yml:")
+        print("[수정] docker-compose.yml에 추가:")
         print("      db:")
         print("        command: mongod --setParameter javascriptEnabled=true")
         print("=" * 70)
@@ -83,20 +83,20 @@ def verify_javascript_enabled(db):
         return False
 
     except Exception as e:
-        print(f"[!] Unexpected error during verification: {e}")
+        print(f"[!] 검증 중 예상치 못한 오류: {e}")
         return False
 
 def init_database(client):
-    """Initialize database with dummy data"""
+    """테스트 데이터로 데이터베이스 초기화"""
     db = client.ctf_db
 
-    # Clear existing data
+    # 기존 데이터 삭제
     existing_count = db.users.count_documents({})
     if existing_count > 0:
-        print(f"[*] Clearing {existing_count} existing documents...")
+        print(f"[*] 기존 문서 {existing_count}개 삭제 중...")
         db.users.delete_many({})
 
-    # Realistic dummy data
+    # 실제 환경과 유사한 더미 데이터
     dummy_users = [
         {
             'username': 'john.doe',
@@ -128,45 +128,45 @@ def init_database(client):
         }
     ]
 
-    # Insert documents
+    # 문서 삽입
     insert_result = db.users.insert_many(dummy_users)
     inserted_count = len(insert_result.inserted_ids)
-    print(f"[+] Inserted {inserted_count} user documents")
+    print(f"[+] 사용자 문서 {inserted_count}개 삽입됨")
 
-    # Verification
+    # 검증
     total_count = db.users.count_documents({})
-    print(f"[+] Total documents in collection: {total_count}")
+    print(f"[+] 컬렉션의 총 문서 수: {total_count}")
 
     if total_count == 0:
-        raise Exception("CRITICAL: No documents inserted!")
+        raise Exception("치명적 오류: 문서가 삽입되지 않음!")
 
     return total_count
 
 def main():
-    """Main initialization routine"""
+    """메인 초기화 루틴"""
     print("=" * 70)
-    print("CTF Challenge: Legacy Microservice Exploitation V3.0")
-    print("Database Initialization Script")
+    print("CTF 문제: Legacy Microservice Exploitation V3.0")
+    print("데이터베이스 초기화 스크립트")
     print("=" * 70)
 
     try:
-        # Step 1: Connect to MongoDB
+        # 단계 1: MongoDB 연결
         client = wait_for_mongodb()
 
-        # Step 2: CRITICAL verification
+        # 단계 2: 중요 검증
         if not verify_javascript_enabled(client.ctf_db):
-            print("\n[!!!] Initialization FAILED - JavaScript disabled")
-            print("[!!!] Container will exit now")
+            print("\n[!!!] 초기화 실패 - JavaScript 비활성화")
+            print("[!!!] 컨테이너 종료")
             client.close()
-            return 1  # Fatal error
+            return 1  # 치명적 에러
 
-        # Step 3: Populate database
+        # 단계 3: 데이터베이스 채우기
         count = init_database(client)
 
-        # Step 4: Success
+        # 단계 4: 성공
         print("=" * 70)
-        print(f"[SUCCESS] Database ready with {count} documents")
-        print("[SUCCESS] JavaScript execution verified")
+        print(f"[성공] 데이터베이스 준비 완료: {count}개 문서")
+        print("[성공] JavaScript 실행 검증됨")
         print("=" * 70)
 
         client.close()
@@ -174,7 +174,7 @@ def main():
 
     except Exception as e:
         print("=" * 70)
-        print(f"[FAILURE] Initialization failed: {str(e)}")
+        print(f"[실패] 초기화 실패: {str(e)}")
         print("=" * 70)
         import traceback
         traceback.print_exc()

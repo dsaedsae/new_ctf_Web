@@ -1,15 +1,15 @@
 """
-Legacy Microservice Exploitation V3.0 - PRODUCTION READY
-CTF Challenge: Chained vulnerabilities in legacy services
+Legacy Microservice Exploitation V3.0 - 프로덕션 준비 완료
+CTF 문제: 레거시 서비스의 연쇄 취약점 공격
 
-DIFFICULTY: DreamHack Level 7-8
-SOLVE TIME: 60-80 minutes (blackbox)
+난이도: DreamHack Level 7-8
+예상 풀이 시간: 60-80분 (블랙박스)
 
-V3.0 FIXES:
-- Fixed bare except clauses
-- Improved command injection output capture
-- Better error handling throughout
-- Enhanced logging
+V3.0 수정 사항:
+- bare except 절 수정
+- Command Injection 출력 캡처 개선
+- 전반적인 에러 처리 개선
+- 로깅 강화
 """
 
 import hashlib
@@ -23,28 +23,28 @@ import pymongo.errors
 app = Flask(__name__)
 
 # ============================================================
-# CONFIGURATION
+# 설정 (CONFIGURATION)
 # ============================================================
 
-# Secret derivation material (from environment)
+# Secret 유도 재료 (환경변수에서 로드)
 COMPANY_SALT = os.getenv('COMPANY_SALT')
 
-# SECURITY: Require explicit configuration
+# 보안: 명시적 설정 필수
 if not COMPANY_SALT:
     raise RuntimeError(
-        "COMPANY_SALT environment variable is required! "
-        "Set it in .env file or docker-compose.yml"
+        "COMPANY_SALT 환경변수가 필요합니다! "
+        ".env 파일 또는 docker-compose.yml에 설정하세요"
     )
 
-# Derive Flask secret key from salt
+# Salt로부터 Flask secret key 유도
 app.secret_key = hashlib.sha256(COMPANY_SALT.encode()).hexdigest()[:32]
 
-# MongoDB connection
+# MongoDB 연결
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://db:27017/')
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client.ctf_db
 
-# Security settings
+# 보안 설정
 app.config['DEBUG'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -53,12 +53,12 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 app.config['SESSION_REFRESH_EACH_REQUEST'] = False
 
 # ============================================================
-# STAGE 1: SERVICE DISCOVERY
+# STAGE 1: 서비스 탐색 (SERVICE DISCOVERY)
 # ============================================================
 
 @app.route('/api/v2/services', methods=['GET'])
 def list_services():
-    """Service discovery endpoint"""
+    """서비스 목록 조회 엔드포인트"""
     return jsonify({
         'services': [
             {
@@ -84,7 +84,7 @@ def list_services():
 
 @app.route('/api/v2/services/<service>/endpoints', methods=['GET'])
 def list_endpoints(service):
-    """Enumerate endpoints for a specific service"""
+    """특정 서비스의 엔드포인트 열거"""
 
     endpoints_map = {
         'legacy': [
@@ -124,24 +124,24 @@ def list_endpoints(service):
     })
 
 # ============================================================
-# STAGE 2-3: LEGACY ENDPOINTS (SECRET DISCOVERY)
+# STAGE 2-3: 레거시 엔드포인트 (SECRET 발견)
 # ============================================================
 
 @app.route('/api/legacy/get_salt', methods=['GET'])
 def get_salt():
     """
-    Legacy endpoint exposing salt value
+    Salt 값을 노출하는 레거시 엔드포인트
 
-    VULNERABILITY: Information disclosure
+    취약점: 정보 노출 (Information disclosure)
     """
     return jsonify({'salt': COMPANY_SALT})
 
 @app.route('/api/legacy/system_info', methods=['GET'])
 def system_info():
     """
-    System information endpoint
+    시스템 정보 엔드포인트
 
-    Enhanced hints for secret derivation
+    Secret 유도를 위한 힌트 제공
     """
     return jsonify({
         'framework': 'Flask',
@@ -154,13 +154,13 @@ def system_info():
     })
 
 # ============================================================
-# STAGE 4: SESSION VERIFICATION
+# STAGE 4: 세션 검증 (SESSION VERIFICATION)
 # ============================================================
 
 @app.route('/api/auth/guest', methods=['POST'])
 def create_guest_session():
     """
-    Creates guest session for testing
+    테스트용 게스트 세션 생성
     """
     session['role'] = 'guest'
     session['user'] = 'guest_user'
@@ -172,40 +172,40 @@ def create_guest_session():
     })
 
 # ============================================================
-# STAGE 6: ADMIN-ONLY ENDPOINT WITH RCE CHAIN
+# STAGE 6: 관리자 전용 엔드포인트 (RCE 체인)
 # ============================================================
 
 @app.route('/api/admin/db/migrate', methods=['POST'])
 def db_migrate():
     """
-    Database migration tool (Admin only)
+    데이터베이스 마이그레이션 도구 (관리자 전용)
 
-    VULNERABILITY CHAIN:
-    1. NoSQL Injection via $where operator
-    2. Command Injection via log_file parameter
+    취약점 체인:
+    1. $where 연산자를 통한 NoSQL Injection
+    2. log_file 파라미터를 통한 Command Injection
     """
 
-    # Difficulty toggle
+    # 난이도 토글
     BLIND_RCE = os.getenv('BLIND_RCE', 'false').lower() == 'true'
 
-    # Stage 5 checkpoint: Verify admin privileges
+    # Stage 5 체크포인트: 관리자 권한 검증
     if session.get('role') != 'admin':
         return jsonify({'error': 'Admin required'}), 403
 
-    # Parse request parameters
+    # 요청 파라미터 파싱
     query_filter = request.json.get('filter', {})
     log_file = request.json.get('log_file', '/dev/null')
 
     try:
-        # VULNERABILITY 1: NoSQL Injection
-        # User input passed directly to MongoDB
+        # 취약점 1: NoSQL Injection
+        # 사용자 입력이 MongoDB에 직접 전달됨
         results = list(db.users.find(query_filter).limit(100))
 
-        # Conditional RCE trigger - only if NoSQL injection succeeds
+        # 조건부 RCE 트리거 - NoSQL injection 성공 시에만 실행
         if "$where" in query_filter and len(results) > 0:
 
-            # VULNERABILITY 2: Command Injection
-            # Fixed: Better output capture
+            # 취약점 2: Command Injection
+            # 개선됨: 출력 캡처 향상
             cmd = f"echo 'Migration started' && echo 'Processing {len(results)} records' > {log_file} 2>&1 && echo 'Migration completed'"
 
             result = subprocess.run(
@@ -219,12 +219,12 @@ def db_migrate():
             response_data = {
                 'status': 'migration complete',
                 'count': len(results),
-                'mode': 'advanced'  # Indicator that RCE path was triggered
+                'mode': 'advanced'  # RCE 경로가 실행되었음을 나타냄
             }
 
-            # Difficulty-based output
+            # 난이도 기반 출력
             if not BLIND_RCE:
-                # EASY MODE: Return command output
+                # 쉬운 모드: 명령어 출력 반환
                 output = result.stdout + result.stderr
                 if output:
                     response_data['log_output'] = output
@@ -233,7 +233,7 @@ def db_migrate():
 
             return jsonify(response_data)
 
-        # Normal response (NoSQL injection not triggered)
+        # 일반 응답 (NoSQL injection이 트리거되지 않음)
         return jsonify({
             'status': 'migration complete',
             'count': len(results)
@@ -243,7 +243,7 @@ def db_migrate():
         return jsonify({'error': 'Migration timeout'}), 408
 
     except pymongo.errors.OperationFailure as e:
-        # Enhanced error handling with hints
+        # 힌트가 포함된 향상된 에러 처리
         error_msg = str(e).lower()
 
         if 'javascript' in error_msg or 'where' in error_msg:
@@ -256,21 +256,21 @@ def db_migrate():
         return jsonify({'error': 'Database query failed'}), 400
 
     except Exception as e:
-        # Generic error without details
+        # 상세 정보 없는 일반 에러
         app.logger.error(f"Migration error: {str(e)}")
         return jsonify({'error': 'Migration failed'}), 400
 
 # ============================================================
-# UTILITY ENDPOINTS
+# 유틸리티 엔드포인트
 # ============================================================
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check for monitoring"""
+    """모니터링용 헬스 체크"""
     try:
         mongo_client.server_info()
 
-        # Verify $where is enabled
+        # $where 연산자가 활성화되었는지 확인
         try:
             test = list(db.users.find({"$where": "function() { return true; }"}).limit(1))
             js_enabled = len(test) > 0
@@ -292,7 +292,7 @@ def health_check():
 
 @app.route('/', methods=['GET'])
 def index():
-    """Root endpoint"""
+    """루트 엔드포인트"""
     return jsonify({
         'message': 'Microservice Platform API',
         'version': '2.0',
@@ -300,10 +300,10 @@ def index():
     })
 
 # ============================================================
-# APPLICATION ENTRY POINT
+# 애플리케이션 진입점
 # ============================================================
 
 if __name__ == '__main__':
-    print("[WARNING] Running with Flask development server")
-    print("[WARNING] Use Gunicorn in production")
+    print("[경고] Flask 개발 서버로 실행 중")
+    print("[경고] 프로덕션에서는 Gunicorn 사용")
     app.run(host='0.0.0.0', port=5000, debug=False)

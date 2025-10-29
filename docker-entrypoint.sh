@@ -1,28 +1,28 @@
 #!/bin/sh
-# Container entrypoint script V3.0
+# 컨테이너 진입점 스크립트 V3.0
 #
-# V3.0 FIXES:
-# - Fixed logic error with set -e
-# - Uses gevent workers for better performance
+# V3.0 수정사항:
+# - set -e 로직 에러 수정
+# - 성능 향상을 위해 gevent worker 사용
 
 echo "=========================================="
-echo "CTF Container Startup - V3.0"
+echo "CTF 컨테이너 시작 - V3.0"
 echo "=========================================="
 
-# Step 1: Initialize database
-echo "[1/2] Initializing database..."
+# 단계 1: 데이터베이스 초기화
+echo "[1/2] 데이터베이스 초기화 중..."
 
-# Option 1: Let set -e handle errors automatically
+# set -e로 에러 자동 처리
 python3 init_db.py || {
-    echo "[ERROR] Database initialization failed"
-    echo "[ERROR] Check MongoDB JavaScript configuration"
+    echo "[에러] 데이터베이스 초기화 실패"
+    echo "[에러] MongoDB JavaScript 설정 확인"
     exit 1
 }
 
-echo "[1/2] Database initialization complete ✓"
+echo "[1/2] 데이터베이스 초기화 완료 ✓"
 
-# Step 2: Start web server with gevent workers
-echo "[2/2] Starting Gunicorn web server (gevent mode)..."
+# 단계 2: gevent worker로 웹 서버 시작
+echo "[2/2] Gunicorn 웹 서버 시작 중 (gevent 모드)..."
 exec gunicorn \
     --bind 0.0.0.0:5000 \
     --workers 4 \
