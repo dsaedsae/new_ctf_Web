@@ -27,7 +27,14 @@ app = Flask(__name__)
 # ============================================================
 
 # Secret derivation material (from environment)
-COMPANY_SALT = os.getenv('COMPANY_SALT', 'CompanyName2025')
+COMPANY_SALT = os.getenv('COMPANY_SALT')
+
+# SECURITY: Require explicit configuration
+if not COMPANY_SALT:
+    raise RuntimeError(
+        "COMPANY_SALT environment variable is required! "
+        "Set it in .env file or docker-compose.yml"
+    )
 
 # Derive Flask secret key from salt
 app.secret_key = hashlib.sha256(COMPANY_SALT.encode()).hexdigest()[:32]
