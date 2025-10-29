@@ -1,31 +1,31 @@
-# Legacy Microservice Exploitation
+# Legacy Microservice 공격
 
-## Challenge Description
+## 문제 설명
 
-Our company's microservice platform has been running for years. We've recently discovered that some legacy endpoints were never properly decommissioned. As part of our security audit, we need you to test these endpoints for vulnerabilities.
+우리 회사의 마이크로서비스 플랫폼은 수년간 운영되어 왔습니다. 최근 일부 레거시 엔드포인트가 제대로 폐기되지 않은 것을 발견했습니다. 보안 감사의 일환으로, 이러한 엔드포인트의 취약점을 테스트해 주시기 바랍니다.
 
-The platform uses a standard REST API architecture with multiple services. Start by exploring the available services and their endpoints.
+이 플랫폼은 여러 서비스로 구성된 표준 REST API 아키텍처를 사용합니다. 먼저 사용 가능한 서비스와 엔드포인트를 탐색하는 것부터 시작하세요.
 
-## Access Information
+## 접속 정보
 
-- **Target URL**: `http://challenge.ctf.local:5000`
-- **Initial Endpoint**: `/api/v2/services`
+- **대상 URL**: `http://challenge.ctf.local:5000`
+- **시작 엔드포인트**: `/api/v2/services`
 
-## Hints
+## 힌트
 
-1. Legacy systems often contain forgotten secrets
-2. Flask sessions can be interesting if you know the secret
-3. NoSQL databases have their own injection techniques
-4. Sometimes multiple vulnerabilities need to be chained together
+1. 레거시 시스템에는 종종 잊혀진 비밀이 있습니다
+2. Flask 세션은 비밀 키를 알면 흥미로워집니다
+3. NoSQL 데이터베이스는 고유한 인젝션 기법이 있습니다
+4. 때로는 여러 취약점을 연결해야 합니다
 
-## Flag Format
+## Flag 형식
 
 `FLAG{...}`
 
-## Difficulty
+## 난이도
 
 ⭐⭐⭐⭐☆ (4/5)
 
 ---
 
-*Note: This challenge involves multiple stages. Take your time to enumerate and understand the system.*
+*참고: 이 문제는 여러 단계로 구성되어 있습니다. 시스템을 충분히 열거하고 이해하는 데 시간을 투자하세요.*
