@@ -313,6 +313,47 @@ def service_detail_ui(service_name):
     return render_template('services.html')
 
 # ============================================================
+# Red Herring Endpoints (Misdirection)
+# ============================================================
+
+@app.route('/admin/login', methods=['GET'])
+def admin_login_ui():
+    """가짜 관리자 로그인 페이지 (Red Herring)"""
+    return render_template('login.html')
+
+@app.route('/admin/login', methods=['POST'])
+def admin_login_post():
+    """가짜 로그인 처리 - 항상 실패 (Red Herring)"""
+    return jsonify({'error': 'Invalid credentials'}), 401
+
+@app.route('/admin', methods=['GET'])
+@app.route('/admin/panel', methods=['GET'])
+@app.route('/admin/users', methods=['GET'])
+def admin_panel_redirect():
+    """가짜 관리자 페이지 - 로그인으로 리다이렉트 (Red Herring)"""
+    return jsonify({
+        'error': 'Unauthorized',
+        'message': 'Please login at /admin/login'
+    }), 401
+
+@app.route('/debug', methods=['GET'])
+@app.route('/test', methods=['GET'])
+def debug_endpoint():
+    """가짜 디버그 엔드포인트 (Red Herring)"""
+    return jsonify({'error': 'Debug mode disabled'}), 403
+
+@app.route('/backup', methods=['GET'])
+@app.route('/backup/<path:filename>', methods=['GET'])
+def backup_endpoint(filename=None):
+    """가짜 백업 엔드포인트 (Red Herring)"""
+    return jsonify({'error': 'Access denied'}), 403
+
+@app.route('/robots.txt', methods=['GET'])
+def robots():
+    """robots.txt 제공"""
+    return app.send_static_file('robots.txt')
+
+# ============================================================
 # 애플리케이션 진입점
 # ============================================================
 
