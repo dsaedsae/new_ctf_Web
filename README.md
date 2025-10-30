@@ -35,7 +35,14 @@
 ### MongoDB 버전
 이 CTF는 **MongoDB 4.4**를 사용합니다. 이유:
 - `$where` 연산자를 사용한 NoSQL Injection이 문제의 핵심입니다
-- MongoDB 5.0+에서는 `--setParameter javascriptEnabled` 파라미터가 제거되었습니다
-- MongoDB 4.4는 해당 파라미터를 지원하며 문제가 정상 작동합니다
+- MongoDB 4.4는 **기본적으로 JavaScript가 활성화**되어 있습니다
+- MongoDB 5.0+에서는 설정 방식이 변경되어 호환성 문제가 있습니다
 
-**주의**: MongoDB 7.0으로 실행하면 컨테이너 시작이 실패합니다!
+**주의**: MongoDB 5.0+ 버전으로 실행하면 컨테이너 시작이 실패할 수 있습니다!
+
+### JavaScript 지원 확인
+컨테이너 실행 후 다음 명령으로 확인:
+```bash
+curl http://localhost:5000/health
+# "javascript_enabled": true 확인
+```

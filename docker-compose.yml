@@ -27,8 +27,9 @@ services:
     image: mongo:4.4
     container_name: ctf_db
     # CRITICAL - Enable JavaScript for $where operator
-    # Note: mongo:7.0 doesn't support this parameter format, use 4.4 instead
-    command: mongod --setParameter javascriptEnabled=true
+    # MongoDB 4.4 has JavaScript enabled by default
+    # Using --noauth for CTF environment (no authentication required)
+    command: mongod --noauth
     networks:
       - ctfnet
     volumes:
