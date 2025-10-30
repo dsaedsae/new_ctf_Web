@@ -24,17 +24,18 @@ services:
 
   # MongoDB database
   db:
-    image: mongo:7.0
+    image: mongo:4.4
     container_name: ctf_db
     # CRITICAL - Enable JavaScript for $where operator
+    # Note: mongo:7.0 doesn't support this parameter format, use 4.4 instead
     command: mongod --setParameter javascriptEnabled=true
     networks:
       - ctfnet
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      # Compatible with both mongosh and mongo
-      test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand(\"ping\")' || mongo --eval 'db.adminCommand(\"ping\")'"]
+      # MongoDB 4.4 uses 'mongo' command (not 'mongosh')
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
       interval: 5s
       timeout: 5s
       retries: 12

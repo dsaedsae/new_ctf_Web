@@ -197,10 +197,10 @@ itsdangerous==2.1.2   # Session signing (Flask dependency)
 - Uses Dockerfile's HEALTHCHECK (no duplicate)
 
 #### db (Lines 25-42)
-- Uses official `mongo:7.0` image
+- Uses official `mongo:4.4` image (note: 5.0+ doesn't support the javascriptEnabled parameter)
 - **CRITICAL LINE 30**: Enables JavaScript with `javascriptEnabled=true`
 - Persists data in named volume `mongo_data`
-- Health check using mongosh/mongo commands
+- Health check using mongo command (4.4 doesn't have mongosh)
 - Aggressive health check (5s interval, 12 retries)
 
 **Networks & Volumes**:

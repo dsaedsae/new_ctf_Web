@@ -200,10 +200,10 @@ itsdangerous==2.1.2   # 세션 서명 (Flask 의존성)
 - Dockerfile의 HEALTHCHECK 사용 (중복 없음)
 
 #### db (Lines 25-42)
-- 공식 `mongo:7.0` 이미지 사용
+- 공식 `mongo:4.4` 이미지 사용 (주의: 5.0+ 버전은 javascriptEnabled 파라미터를 지원하지 않음)
 - **중요 LINE 30**: `javascriptEnabled=true`로 JavaScript 활성화
 - 명명된 볼륨 `mongo_data`에 데이터 저장
-- mongosh/mongo 명령어를 사용한 헬스 체크
+- mongo 명령어를 사용한 헬스 체크 (4.4에는 mongosh가 없음)
 - 공격적인 헬스 체크 (5초 간격, 12회 재시도)
 
 **네트워크 & 볼륨**:
