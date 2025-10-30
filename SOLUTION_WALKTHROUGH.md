@@ -279,16 +279,47 @@ curl http://ctf.challenge.com:5000/api/v2/services | jq
 ```
 
 ### 참가자의 사고:
-> "OK! 3개의 서비스가 있고, 각각 이름이 있네. RESTful API 패턴이라면 `/api/v2/services/{service_name}/endpoints` 같은 경로가 있을 것 같다."
+> "OK! 3개의 서비스가 있고, 각각 이름이 있네.
+>
+> 서비스 목록만 주고 끝낼 리 없는데... 각 서비스의 상세 정보를 어떻게 얻을까?
+>
+> 일반적인 RESTful API 패턴을 생각해보면:
+> - `/api/v2/services` - 전체 목록
+> - `/api/v2/services/{id}` - 특정 서비스 상세
+> - `/api/v2/services/{name}` - 이름으로 조회
+>
+> 'auth', 'database', 'legacy'라는 이름이 주어졌으니, 한 번 시도해보자.
+>
+> 그리고 API 설계 관점에서 서비스별 엔드포인트 목록을 제공하는 패턴도 흔하다:
+> - `/api/v2/services/{name}/info`
+> - `/api/v2/services/{name}/endpoints`
+> - `/api/v2/services/{name}/methods`
+>
+> 일단 endpoints부터 시도해보자."
 
-### Action 11: 각 서비스의 엔드포인트 조회
+### Action 11: 각 서비스의 엔드포인트 조회 시도
 
 ```bash
-# Auth 서비스
-curl http://ctf.challenge.com:5000/api/v2/services/auth/endpoints | jq
+# 먼저 단순하게 서비스 이름만 붙여보기
+curl http://ctf.challenge.com:5000/api/v2/services/auth
 ```
 
 **결과**:
+```json
+{"error": "Not Found"}
+```
+
+### 참가자의 사고:
+> "404네. 그럼 다른 패턴을 시도해보자.
+>
+> API 문서나 스웨거 같은 게 있을까? /api/v2/services/auth/docs? 아니면 /endpoints?"
+
+```bash
+# endpoints 경로 시도
+curl http://ctf.challenge.com:5000/api/v2/services/auth/endpoints | jq
+```
+
+**결과 (성공!)**:
 ```json
 {
   "service": "auth",
@@ -420,11 +451,16 @@ Secret Key: d8c5e3f7a2b4e1c9f6d3a8b2e5c7f1a4
 >
 > 하지만 어떤 세션을 만들어야 할까? robots.txt에서 /api/admin/ 경로를 봤었는데, 아마 관리자 권한이 필요할 것 같다.
 >
-> 먼저 게스트 세션을 만들어서 세션 구조를 확인해보자."
+> 먼저 게스트 세션을 만들어서 세션 구조를 확인해보자.
+>
+> Flask 세션은 쿠키로 전달되니까, 쿠키를 파일로 저장해서 나중에 재사용할 수 있게 하자.
+> curl의 `-c` 옵션을 사용하면 쿠키를 파일로 저장할 수 있다."
 
 ### Action 15: 게스트 세션 생성
 
 ```bash
+# -c cookies.txt: 쿠키를 파일로 저장 (나중에 재사용)
+# -v: 헤더 상세 정보 확인 (Set-Cookie 헤더 보기)
 curl -X POST http://ctf.challenge.com:5000/api/auth/guest -c cookies.txt -v
 ```
 
@@ -746,8 +782,10 @@ FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}
 ### 2. Red Herring 식별
 > "15분 동안 /admin/login을 시도했지만 계속 실패. HTML 주석에 'See /api/auth/*' 힌트를 다시 보고 방향 전환."
 
-### 3. API 패턴 인식
-> "/api/v2/services가 있으면, RESTful 패턴으로 /api/v2/services/{name}/endpoints도 있을 것이다."
+### 3. API 패턴 인식 (시행착오)
+> "/api/v2/services가 있고 서비스 이름이 주어졌다.
+> 먼저 /api/v2/services/auth를 시도 → 404
+> 그럼 RESTful 패턴으로 /endpoints, /info, /methods 등을 시도해보자 → 성공!"
 
 ### 4. 정보 연결
 > "Salt + sha256 + 32-char = Flask secret_key. 이건 세션 위조로 이어진다!"
