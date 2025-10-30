@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Services - Microservice Platform{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="display-5">Service Directory</h1>
+            <p class="lead text-muted">Available microservices and their endpoints</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Auth Service -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-shield-lock-fill"></i> Authentication Service
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <span class="badge bg-success">Active</span>
+                        <span class="badge bg-secondary">v2.1.0</span>
+                    </div>
+                    <p class="card-text">Handles user authentication and session management.</p>
+
+                    <h6 class="mt-3">Endpoints:</h6>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">
+                            <code>POST /api/auth/guest</code>
+                            <br><small class="text-muted">Guest session creation</small>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="/services/auth" class="btn btn-sm btn-outline-success">View Details</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Service -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-cloud-arrow-up-fill"></i> API Gateway
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <span class="badge bg-success">Active</span>
+                        <span class="badge bg-secondary">v2.0.5</span>
+                    </div>
+                    <p class="card-text">Main API gateway for service discovery and routing.</p>
+
+                    <h6 class="mt-3">Endpoints:</h6>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">
+                            <code>GET /api/v2/services</code>
+                            <br><small class="text-muted">Service discovery</small>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="/services/api" class="btn btn-sm btn-outline-primary">View Details</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legacy Service -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="bi bi-archive-fill"></i> Legacy Service
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <span class="badge bg-warning text-dark">Deprecated</span>
+                        <span class="badge bg-secondary">v1.0.0</span>
+                    </div>
+                    <p class="card-text">Legacy endpoints scheduled for removal.</p>
+                    <p class="text-muted small">
+                        <i class="bi bi-info-circle"></i> Endpoint documentation has been archived.
+                        Contact system administrator for access.
+                    </p>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-sm btn-outline-secondary" disabled>Documentation Unavailable</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden comment for enumeration -->
+    <!-- Legacy endpoints exist but are not publicly documented -->
+    <!-- API enumeration may reveal additional services -->
+
+    <!-- Red Herring: Fake admin access hint -->
+    <!-- DEPRECATED: Direct admin access at /admin/panel -->
+    <!-- Use /admin/login with company credentials instead -->
+    <!-- Note: Some legacy features still require /api/admin/* endpoints -->
+</div>
+{% endblock %}

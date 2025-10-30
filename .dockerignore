@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Documentation (keep README.md for participants)
+WRITEUP.md
+
+# Solution files
+solution/
+
+# Environment
+.env
+.env.example
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

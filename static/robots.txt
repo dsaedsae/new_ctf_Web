@@ -1,0 +1,30 @@
+# robots.txt - Microservice Platform
+
+User-agent: *
+
+# Public API
+Allow: /api/v2/
+
+# Disallow administrative interfaces
+Disallow: /admin
+Disallow: /admin/login
+Disallow: /api/admin/
+
+# Deprecated endpoints
+Disallow: /api/legacy/
+
+# Development files (do not index)
+Disallow: /debug
+Disallow: /test
+Disallow: /.env
+Disallow: /backup/
+
+# Old admin panel (deprecated)
+Disallow: /admin/panel
+Disallow: /admin/users
+
+# Internal documentation
+Disallow: /docs/internal
+
+# Sitemap
+Sitemap: /sitemap.xml
