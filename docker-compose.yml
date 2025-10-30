@@ -1,0 +1,34 @@
+services:
+  db:
+    image: mongo:4.4
+    container_name: ctf_db
+    command: mongod --setParameter javascriptEnabled=false
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - ctf_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    container_name: ctf_web
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - MONGO_URI=mongodb://db:27017/ctf
+    networks:
+      - ctf_network
+
+networks:
+  ctf_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
