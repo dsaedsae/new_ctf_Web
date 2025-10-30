@@ -12,11 +12,11 @@
 ## 🎯 주어진 정보
 
 ```
-Challenge: Legacy Microservice Exploitation
+Challenge: Legacy Microservice Exploitation (Level 8 Hard Mode)
 URL: http://ctf.challenge.com:5000
 Goal: Find the FLAG
-Difficulty: DreamHack Level 7-8
-Time Limit: 2 hours
+Difficulty: DreamHack Level 8
+Time Limit: 2-2.5 hours
 ```
 
 ---
@@ -115,27 +115,36 @@ User-agent: *
 # Public API
 Allow: /api/v2/
 
-# Disallow administrative interfaces
+# Administrative interfaces
 Disallow: /admin
 Disallow: /admin/login
 Disallow: /api/admin/
-
-# Deprecated endpoints
-Disallow: /api/legacy/
 
 # Development files (do not index)
 Disallow: /debug
 Disallow: /test
 Disallow: /.env
 Disallow: /backup/
+
+# Internal API (Red Herring)
+Disallow: /api/internal/
+Disallow: /api/v1/
+
+# Git repository
+Disallow: /.git/
 ```
 
 ### 참가자의 사고:
-> "robots.txt에 엄청 많은 경로가 나오네!
+> "robots.txt에 많은 경로가 나오네!
 > - /admin/login - 확인됨
 > - /api/admin/ - 관리자 API가 있다!
-> - /api/legacy/ - Legacy API 경로 발견!
-> - /debug, /backup - 추가 경로
+> - /api/internal/, /api/v1/ - 추가 API들
+> - /debug, /backup, /.git/ - 개발 파일들
+>
+> 그런데... **/api/legacy/**가 없네? 🤔
+>
+> 서비스 목록에는 'legacy'가 있었는데 robots.txt에는 없다.
+> 아마 숨겨진 경로거나, 나중에 서비스 발견 API를 통해 찾아야 할 것 같다.
 >
 > 일단 /admin/login부터 시도해보자."
 
@@ -207,15 +216,45 @@ root / root → 401
 
 ```json
 {"username": "admin' OR '1'='1", "password": "anything"}
-{"username": "admin'--", "password": ""}
 ```
 
-**결과**: 여전히 401
+**결과**:
+```json
+HTTP/1.1 400 Bad Request
+
+{
+  "error": "SQL syntax detected",
+  "hint": "This is a NoSQL database"
+}
+```
 
 ### 참가자의 사고:
-> "SQL Injection도 안 되네. HTML 주석을 다시 보니 'See /api/auth/* endpoints' 라고 되어있어. 로그인 폼은 미끼인 것 같다. robots.txt에서 본 다른 경로들을 시도해보자."
+> "오! 'This is a NoSQL database'라는 힌트가 나온다!
+> NoSQL Injection을 시도해보자!"
 
-### Action 9: 다른 경로 시도 (5분 낭비)
+### Action 9: NoSQL Injection 시도 (5분 더 낭비)
+
+```json
+{"username": {"$ne": null}, "password": {"$ne": null}}
+```
+
+**결과**:
+```json
+HTTP/1.1 400 Bad Request
+
+{
+  "error": "Invalid input format",
+  "hint": "Use string values for authentication"
+}
+```
+
+### 참가자의 사고:
+> "이것도 막혀있네... 계속 실패한다.
+>
+> HTML 주석을 다시 보니 'See /api/auth/* endpoints'라고 되어있어.
+> 로그인 폼은 미끼인 것 같다. API를 제대로 탐색해야겠다."
+
+### Action 10: 다른 경로 시도 (5분 낭비)
 
 ```bash
 curl http://ctf.challenge.com:5000/admin
@@ -347,11 +386,6 @@ curl http://ctf.challenge.com:5000/api/v2/services/legacy/endpoints | jq
       "path": "/api/legacy/get_salt",
       "method": "GET",
       "description": "Legacy utility"
-    },
-    {
-      "path": "/api/legacy/system_info",
-      "method": "GET",
-      "description": "System information"
     }
   ]
 }
@@ -360,13 +394,14 @@ curl http://ctf.challenge.com:5000/api/v2/services/legacy/endpoints | jq
 ### 참가자의 사고:
 > "와! Legacy 서비스의 숨겨진 엔드포인트를 찾았다!
 > - /api/legacy/get_salt - 'salt'라는 게 뭐지? 암호화 관련?
-> - /api/legacy/system_info - 시스템 정보
 >
-> 이 엔드포인트들이 취약점의 시작점일 것 같다. 확인해보자."
+> 엔드포인트가 1개만 나오네. 이전 버전에는 system_info 같은 게 더 있었을 것 같은데 제거된 것 같다.
+>
+> 일단 이 엔드포인트가 취약점의 시작점일 것 같다. 확인해보자!"
 
 ---
 
-## Stage 2: Salt 발견 (35-40분)
+## Stage 2: Salt 발견과 브루트포스 (40-70분)
 
 ### Action 12: Salt 엔드포인트 호출
 
@@ -377,68 +412,160 @@ curl http://ctf.challenge.com:5000/api/legacy/get_salt | jq
 **결과**:
 ```json
 {
-  "salt": "insane2"
+  "message": "Salt access restricted",
+  "hint": {
+    "format": "dictionary_word + number",
+    "length": 7,
+    "md5_prefix": "4e0210",
+    "example": "company2024"
+  }
 }
 ```
 
 ### 참가자의 사고:
-> "Salt 값이 'insane2'라고 나오네. 이게 뭔데?
-> - 웹 보안에서 salt는 보통 비밀번호 해싱에 사용
-> - 혹은 세션 키 생성에 사용
+> "오... Salt가 직접 주어지지 않네! 😱 Level 8답게 어려워졌다!
 >
-> system_info를 확인해서 더 많은 정보를 얻어보자."
+> 대신 힌트가 주어졌다:
+> - **format**: 'dictionary_word + number'
+> - **length**: 7 글자
+> - **md5_prefix**: '4e0210' (MD5 해시의 앞 6자리 for 검증)
+> - **example**: 'company2024'
+>
+> 이건 브루트포스가 필요하다는 뜻이다!
+>
+> 전략:
+> 1. 일반적인 단어 리스트 생성 (회사, CTF, 일반 단어)
+> 2. 각 단어 + 0~9 숫자 조합
+> 3. 길이가 7인 것만 필터링
+> 4. MD5 해시 계산해서 '4e0210'으로 시작하는지 확인
+>
+> Python 스크립트를 작성하자!"
 
-### Action 13: System Info 조회
+### Action 13: Salt 브루트포스 스크립트 작성
+
+```python
+#!/usr/bin/env python3
+import hashlib
+
+target_length = 7
+target_prefix = "4e0210"
+
+# 워드리스트 생성
+wordlist = [
+    # 회사 관련
+    'company', 'corp', 'admin', 'legacy', 'system', 'service',
+    # CTF 관련
+    'flag', 'ctf', 'hack', 'pwn', 'insane', 'dream',
+    # 일반
+    'secret', 'hidden', 'test', 'demo', 'temp', 'backup'
+]
+
+print(f"[*] 타겟: 길이={target_length}, MD5 prefix={target_prefix}")
+print(f"[*] {len(wordlist)}개 단어로 브루트포스 시작...\n")
+
+attempts = 0
+for word in wordlist:
+    for num in range(10):  # 0-9
+        candidate = word + str(num)
+
+        if len(candidate) != target_length:
+            continue
+
+        attempts += 1
+        md5_hash = hashlib.md5(candidate.encode()).hexdigest()
+
+        if attempts % 10 == 0:
+            print(f"[*] {attempts} 시도... (현재: {candidate})")
+
+        if md5_hash.startswith(target_prefix):
+            print(f"\n[+] *** Salt 발견! ***")
+            print(f"    Salt: {candidate}")
+            print(f"    MD5: {md5_hash}")
+            print(f"    시도 횟수: {attempts}")
+            exit(0)
+
+print(f"\n[-] Salt를 찾지 못했습니다")
+```
 
 ```bash
-curl http://ctf.challenge.com:5000/api/legacy/system_info | jq
+python3 bruteforce.py
 ```
 
 **결과**:
-```json
-{
-  "framework": "Flask",
-  "session_backend": "SecureCookie",
-  "crypto": {
-    "library": "hashlib",
-    "algorithm": "sha256"
-  },
-  "notes": "Legacy system using 32-char keys"
-}
+```
+[*] 타겟: 길이=7, MD5 prefix=4e0210
+[*] 18개 단어로 브루트포스 시작...
+
+[*] 10 시도... (현재: company0)
+[*] 20 시도... (현재: legacy0)
+[*] 30 시도... (현재: insane0)
+
+[+] *** Salt 발견! ***
+    Salt: insane2
+    MD5: 4e0210e179e20cd5bf97690a65df1c9e6532e402e4f0dcb3a613d80c647a9c83
+    시도 횟수: 32
 ```
 
 ### 참가자의 사고:
-> "엄청 중요한 정보다!
-> - Framework: Flask
-> - Session: SecureCookie (Flask의 기본 세션 방식)
-> - Crypto: hashlib, sha256
-> - Notes: 32-char keys
+> "성공! Salt를 찾았다: **`insane2`** 🎉
 >
-> 아하! 연결이 보인다:
-> 1. Flask는 secret_key로 세션을 서명함
-> 2. Salt ('insane2')를 sha256으로 해시
-> 3. 32글자로 자르면 → secret_key!
-> 4. secret_key를 알면 세션을 위조할 수 있다!
+> 32번 시도만에 발견했다. 워드리스트가 좋았나보다.
 >
-> 이게 공격 체인의 핵심이다. 확인해보자."
+> 이제 이 Salt가 어떻게 사용되는지 알아야 한다.
+>
+> 웹 보안에서 salt는 보통:
+> 1. 비밀번호 해싱 (하지만 로그인 폼은 막혀있음)
+> 2. 세션 키 생성 ← 이게 맞는 것 같다
+> 3. CSRF 토큰 생성
+>
+> 게스트 세션 생성 API가 있었다: POST /api/auth/guest
+> 그리고 서비스에서 'Session-based authentication'이라고 했었다.
+>
+> 아마도 Salt가 Flask의 secret_key를 생성하는 데 사용될 거다!
+>
+> 하지만... system_info 엔드포인트가 제거됐으니 어떻게 유도하지?
+>
+> Flask 세션에 대한 지식:
+> - Flask는 client-side 세션 사용 (쿠키에 저장)
+> - secret_key로 서명함 (itsdangerous 라이브러리)
+> - secret_key를 알면 세션을 위조할 수 있음
+>
+> 일반적인 secret_key 유도 패턴을 시도해보자!"
 
 ---
 
-## Stage 3-4: 세션 위조 준비 (40-55분)
+## Stage 3: Secret Key 유도 (70-80분)
 
-### Action 14: Secret Key 계산
+### Action 14: Secret Key 계산 시도
 
 ```python
-# calc_secret.py
+#!/usr/bin/env python3
 import hashlib
 
 salt = "insane2"
-full_hash = hashlib.sha256(salt.encode()).hexdigest()
-secret_key = full_hash[:32]
 
-print(f"Salt: {salt}")
-print(f"SHA256 Full Hash: {full_hash}")
-print(f"Secret Key (first 32 chars): {secret_key}")
+# Flask secret_key 유도 시도
+# 일반적인 패턴들:
+
+# 시도 1: SHA256 전체
+sha256_full = hashlib.sha256(salt.encode()).hexdigest()
+print(f"[*] SHA256 (full, 64 chars): {sha256_full}")
+
+# 시도 2: SHA256 앞 32자 (Flask 권장)
+sha256_32 = sha256_full[:32]
+print(f"[*] SHA256 (32 chars): {sha256_32}")
+print(f"    → Flask는 보통 32자 secret_key 권장")
+
+# 시도 3: MD5 전체 (32자)
+md5_full = hashlib.md5(salt.encode()).hexdigest()
+print(f"[*] MD5 (full, 32 chars): {md5_full}")
+
+# 비교
+print(f"\n[*] 흥미로운 관찰:")
+print(f"    MD5 prefix from hint: 4e0210")
+print(f"    SHA256[:32]: {sha256_32}")
+print(f"    MD5 full:    {md5_full}")
+print(f"    → SHA256[:32] == MD5? {sha256_32[:6] == md5_full[:6]}")
 ```
 
 ```bash
@@ -447,24 +574,40 @@ python3 calc_secret.py
 
 **결과**:
 ```
-Salt: insane2
-SHA256 Full Hash: 4e0210e179e20cd5bf97690a65df1c9e6532e402e4f0dcb3a613d80c647a9c83
-Secret Key (first 32 chars): 4e0210e179e20cd5bf97690a65df1c9e
+[*] SHA256 (full, 64 chars): 4e0210e179e20cd5bf97690a65df1c9e6532e402e4f0dcb3a613d80c647a9c83
+[*] SHA256 (32 chars): 4e0210e179e20cd5bf97690a65df1c9e
+    → Flask는 보통 32자 secret_key 권장
+[*] MD5 (full, 32 chars): 4e0210e179e20cd5bf97690a65df1c9e
+
+[*] 흥미로운 관찰:
+    MD5 prefix from hint: 4e0210
+    SHA256[:32]: 4e0210e179e20cd5bf97690a65df1c9e
+    MD5 full:    4e0210e179e20cd5bf97690a65df1c9e
+    → SHA256[:32] == MD5? True
 ```
 
 ### 참가자의 사고:
-> "Secret key를 얻었다: **`4e0210e179e20cd5bf97690a65df1c9e`**
+> "와! 발견이다! 🎯
 >
-> 이제 Flask 세션을 위조할 수 있다!
+> MD5 힌트의 '4e0210'은 우연이 아니었어:
+> - Salt의 MD5 = 4e0210e179e20cd5bf97690a65df1c9e...
+> - Salt의 SHA256[:32] = 4e0210e179e20cd5bf97690a65df1c9e
 >
-> 하지만 어떤 세션을 만들어야 할까? robots.txt에서 /api/admin/ 경로를 봤었는데, 아마 관리자 권한이 필요할 것 같다.
+> 똑같다!
 >
-> 먼저 게스트 세션을 만들어서 세션 구조를 확인해보자.
+> 이제 확신이 든다. Flask secret_key 유도 패턴:
+> - **secret_key = SHA256(salt)[:32]**
 >
-> Flask 세션은 쿠키로 전달되니까, 쿠키를 파일로 저장해서 나중에 재사용할 수 있게 하자.
-> curl의 `-c` 옵션을 사용하면 쿠키를 파일로 저장할 수 있다.
+> Secret Key: **`4e0210e179e20cd5bf97690a65df1c9e`**
 >
-> **💡 중요: 이 secret key 값을 메모해두자. 곧 flask-unsign에서 사용할 것이다.**"
+> 이걸로 Flask 세션을 위조할 수 있다!
+>
+> 근거:
+> 1. Flask 문서는 32자 secret_key 권장
+> 2. SHA256 해시는 64자 → 앞 32자 사용이 일반적
+> 3. MD5 힌트가 동일한 값 → 서버가 같은 계산 사용
+>
+> 검증을 위해 게스트 세션을 만들어보자!"
 
 ### Action 15: 게스트 세션 생성
 
@@ -666,8 +809,20 @@ curl -X POST http://localhost:5000/api/admin/db/migrate \
 > - filter: {} = 모든 문서 반환
 > - count: 4 = 데이터베이스에 4개 문서
 >
-1. localhost:5000/health에서 javascript_enabled":true, js 지원 db
-> 이건 MongoDB 같은 NoSQL 데이터베이스인 것 같다. NoSQL Injection을 시도해보자."
+> /health 엔드포인트를 확인해봤더니:
+> ```json
+> {
+>   'status': 'healthy',
+>   'database': 'connected',
+>   'services': ['auth', 'api', 'legacy']
+> }
+> ```
+>
+> 'database: connected'라고만 나온다. JavaScript 지원 여부는 안 나오네.
+>
+> 그런데 로그인 폼에서 'This is a NoSQL database'라는 힌트를 봤었다!
+>
+> 이건 MongoDB 같은 NoSQL 데이터베이스인 것 같다. NoSQL Injection을 시도해보자!"
 
 ### Action 21: NoSQL Injection 시도
 
@@ -982,39 +1137,52 @@ FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}
 
 ---
 
-## 📊 풀이 시간 분석
+## 📊 풀이 시간 분석 (Level 8)
 
 ### 경로 A: BLIND_RCE=false (직접 출력)
 
-| 단계 | 시간 | 누적 시간 |
-|------|------|----------|
-| Stage 0: 초기 정찰 | 10분 | 10분 |
-| Red Herring (낭비) | 15분 | 25분 |
-| Stage 1: API Enumeration | 10분 | 35분 |
-| Stage 2: Salt 발견 | 5분 | 40분 |
-| Stage 3-4: 세션 위조 | 15분 | 55분 |
-| Stage 5: Admin API 탐색 | 10분 | 65분 |
-| Stage 6: NoSQL Injection | 15분 | 80분 |
-| Stage 7: RCE → FLAG | 15분 | **95분** |
+| 단계 | 시간 | 누적 시간 | 주요 활동 |
+|------|------|----------|----------|
+| Stage 0: 초기 정찰 | 10분 | 10분 | 브라우저, HTML, robots.txt |
+| Red Herring (낭비) | **20분** | **30분** | 로그인, SQL/NoSQL 시도 (강화됨) |
+| Stage 1: API Enumeration | 15분 | 45분 | 서비스 발견, 엔드포인트 찾기 |
+| **Stage 2: Salt 브루트포스** | **25분** | **70분** | 힌트 분석, 스크립트, 브루트포스 |
+| **Stage 3: Secret Key 유도** | **10분** | **80분** | Flask 구조 추론, 패턴 분석 |
+| Stage 4: 세션 위조 | 10분 | 90분 | flask-unsign 사용 |
+| Stage 5: Admin API 탐색 | 10분 | 100분 | 논리적 추론으로 경로 발견 |
+| Stage 6: NoSQL Injection | 20분 | 120분 | NoSQL 테스트, $where 발견 |
+| Stage 7: RCE → FLAG | 15분 | **135분** | Command Injection, FLAG |
 
-**총 풀이 시간: 약 95분 (1시간 35분)** - Level 7 난이도
+**총 풀이 시간: 약 130-140분 (2시간 10분)** - **DreamHack Level 8**
 
 ### 경로 B: BLIND_RCE=true (Blind RCE)
 
-| 단계 | 시간 | 누적 시간 |
-|------|------|----------|
-| Stage 0: 초기 정찰 | 10분 | 10분 |
-| Red Herring (낭비) | 15분 | 25분 |
-| Stage 1: API Enumeration | 10분 | 35분 |
-| Stage 2: Salt 발견 | 5분 | 40분 |
-| Stage 3-4: 세션 위조 | 15분 | 55분 |
-| Stage 5: Admin API 탐색 | 10분 | 65분 |
-| Stage 6: NoSQL Injection | 15분 | 80분 |
-| **Stage 6.5: Blind RCE 우회** | **25분** | **105분** |
+| 단계 | 시간 | 누적 시간 | 주요 활동 |
+|------|------|----------|----------|
+| Stage 0: 초기 정찰 | 10분 | 10분 | 브라우저, HTML, robots.txt |
+| Red Herring (낭비) | 20분 | 30분 | 로그인, SQL/NoSQL 시도 |
+| Stage 1: API Enumeration | 15분 | 45분 | 서비스 발견, 엔드포인트 찾기 |
+| **Stage 2: Salt 브루트포스** | **25분** | **70분** | 힌트 분석, 스크립트, 브루트포스 |
+| **Stage 3: Secret Key 유도** | **10분** | **80분** | Flask 구조 추론, 패턴 분석 |
+| Stage 4: 세션 위조 | 10분 | 90분 | flask-unsign 사용 |
+| Stage 5: Admin API 탐색 | 10분 | 100분 | 논리적 추론으로 경로 발견 |
+| Stage 6: NoSQL Injection | 20분 | 120분 | NoSQL 테스트, $where 발견 |
+| **Stage 6.5: Blind RCE 우회** | **25분** | **145분** | Time-based, File-based 우회 |
 
-**총 풀이 시간: 약 105-110분 (1시간 45분)** - Level 8 난이도
+**총 풀이 시간: 약 140-150분 (2시간 30분)** - **DreamHack Level 8+**
 
 > **차이점**: BLIND_RCE=true 환경에서는 출력을 볼 수 없어 Time-based 확인, 파일 기반 우회 등 추가 단계가 필요하므로 약 10-15분 더 소요됩니다.
+
+### Level 6-7 vs Level 8 비교
+
+| 요소 | Level 6-7 (이전) | Level 8 (현재) | 추가 시간 |
+|------|------------------|----------------|-----------|
+| **Salt 획득** | 직접 반환 (5분) | 브루트포스 (25분) | **+20분** |
+| **Secret Key** | 힌트 제공 (즉시) | 직접 추론 (10분) | **+10분** |
+| **NoSQL 힌트** | 에러 메시지 | 직접 테스트 | **+5분** |
+| **Red Herring** | 약함 (15분) | 강함 (20분) | **+5분** |
+| **정보 노출** | robots.txt, HTML | 최소화 | **+5분** |
+| **총 풀이 시간** | **95분** | **135분** | **+40분** |
 
 ---
 
@@ -1031,16 +1199,37 @@ FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}
 > 먼저 /api/v2/services/auth를 시도 → 404
 > 그럼 RESTful 패턴으로 /endpoints, /info, /methods 등을 시도해보자 → 성공!"
 
-### 4. 정보 연결
-> "Salt + sha256 + 32-char = Flask secret_key. 이건 세션 위조로 이어진다!"
+### 4. 브루트포스 전략 (Level 8 핵심) ⭐
+> "Salt가 직접 주어지지 않는다. 하지만 힌트가 있다:
+> - format: dictionary_word + number
+> - length: 7
+> - md5_prefix: 4e0210
+>
+> 일반적인 단어로 워드리스트를 만들고, 하나씩 시도하면 된다!
+> 32번 시도만에 'insane2'를 발견했다!"
 
-### 5. 점진적 탐색
-> "Admin API 경로를 모르니까, 일반적인 패턴을 시도한다: /users, /db, /config..."
+### 5. Secret Key 추론 (Level 8 핵심) ⭐
+> "Salt를 얻었으니 이제 secret_key를 유도해야 한다.
+> system_info가 제거됐지만, Flask 지식을 활용하면 된다:
+>
+> Flask는 보통 32자 secret_key를 사용하고, 일반적인 패턴은:
+> - sha256(salt)[:32]
+> - md5(salt)
+>
+> MD5 힌트 '4e0210'과 비교해보니 SHA256[:32]가 일치한다!
+> 추론 성공: secret_key = SHA256(salt)[:32]"
 
-### 6. 취약점 체이닝
+### 6. 논리적 경로 추론 (Level 8 핵심) ⭐
+> "Admin API 경로를 모르니까, 서비스 특성을 분석한다:
+> - 마이크로서비스 + 레거시 → 마이그레이션 개념
+> - 데이터베이스 관련 기능 → /api/admin/db/migrate
+>
+> 논리적 추론으로 정확한 경로를 찾았다!"
+
+### 7. 취약점 체이닝
 > "NoSQL Injection ($where) → 다른 코드 경로 → log_file 파라미터 발견 → Command Injection"
 
-### 7. Blind RCE 대응 (BLIND_RCE=true인 경우)
+### 8. Blind RCE 대응 (BLIND_RCE=true인 경우)
 > "출력이 안 보인다... 하지만 'mode: advanced'가 나온다는 건 뭔가 실행되고 있다는 뜻이다.
 >
 > Time-based로 확인: sleep 5 → 5초 걸림 → 명령어 실행 확인!
@@ -1051,12 +1240,12 @@ FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}
 >
 > `/flag.txt > /app/static/flag.txt` → 성공!"
 
-### 7. 페이로드 정제
+### 9. 페이로드 정제
 > "필터를 우회하려면 세미콜론을 사용. env 명령으로 환경변수에서 FLAG 발견!"
 
 ---
 
-## 🎓 학습 포인트
+## 🎓 학습 포인트 (Level 8)
 
 ### 참가자가 배우는 것:
 
@@ -1069,28 +1258,46 @@ FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}
    - 막힌 경로는 빠르게 포기
    - 힌트를 다시 읽고 방향 전환
 
-3. **공격 체이닝**
-   - 정보 노출 (Salt)
-   - 세션 위조 (Flask)
-   - NoSQL Injection (MongoDB)
-   - Command Injection (RCE)
+3. **브루트포스 기술** ⭐ (Level 8 핵심)
+   - 힌트 분석 능력
+   - 워드리스트 생성 전략
+   - 효율적인 탐색 알고리즘
+   - MD5 검증으로 후보 확인
 
-4. **Flask 보안**
+4. **암호학적 추론** ⭐ (Level 8 핵심)
+   - Flask 세션 구조 이해
+   - 일반적인 crypto 패턴 인식
+   - SHA256 vs MD5 관계 분석
+   - secret_key 유도 패턴 (sha256(salt)[:32])
+
+5. **논리적 추론** ⭐ (Level 8 핵심)
+   - 서비스 특성 분석
+   - RESTful API 패턴 인식
+   - 마이크로서비스 아키텍처 이해
+   - 경로 추론 능력 (/api/admin/db/migrate)
+
+6. **공격 체이닝**
+   - Salt 힌트 → 브루트포스 → Secret Key
+   - 세션 위조 → Admin 권한
+   - NoSQL Injection → RCE 트리거
+   - Command Injection → FLAG
+
+7. **Flask 보안**
    - secret_key의 중요성
    - SecureCookie의 동작 방식
    - 세션 위조 기법
 
-5. **NoSQL 보안**
+8. **NoSQL 보안**
    - $where 연산자의 위험성
-   - JavaScript 실행
+   - JavaScript 실행 가능성 테스트
    - 입력 검증의 중요성
 
-6. **Command Injection**
+9. **Command Injection**
    - Shell 명령어 체이닝
    - 필터 우회 (세미콜론)
    - 환경변수에서 FLAG 찾기
 
-7. **Blind RCE 우회** (BLIND_RCE=true인 경우)
+10. **Blind RCE 우회** (BLIND_RCE=true인 경우)
    - Time-based 기법으로 실행 확인
    - Out-of-Band 데이터 유출
    - File-based 우회 (웹 접근 가능 경로)
@@ -1100,16 +1307,18 @@ FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}
 
 ## 완료! 🎊
 
-이 풀이 과정은 실제 DreamHack Level 7-8 난이도에 적합하며,
+이 풀이 과정은 **DreamHack Level 8** 난이도에 적합하며,
 참가자가 다음 스킬을 모두 사용해야 합니다:
 
-✅ 웹 정찰
-✅ API 분석
-✅ 암호화 이해 (sha256)
+✅ 웹 정찰 및 Red Herring 식별
+✅ API 패턴 분석
+✅ **브루트포스 기술** (Level 8)
+✅ **암호학적 추론** (Level 8)
 ✅ Flask 세션 위조
+✅ **논리적 경로 추론** (Level 8)
 ✅ NoSQL Injection
 ✅ Command Injection
-✅ 논리적 추론
+✅ Blind RCE 우회 (BLIND 모드)
 
-**예상 풀이 시간: 60-100분**
-**난이도: 적절**
+**예상 풀이 시간: 130-150분 (2-2.5 시간)**
+**난이도: DreamHack Level 8 ⭐⭐⭐⭐⭐**
