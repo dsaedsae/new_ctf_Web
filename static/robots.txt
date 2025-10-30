@@ -1,27 +1,19 @@
-# robots.txt - Microservice Platform
-
 User-agent: *
 
-# Public API
 Allow: /api/v2/
 
-# Administrative interfaces
 Disallow: /admin
 Disallow: /admin/login
 Disallow: /api/admin/
 
-# Development files (do not index)
 Disallow: /debug
 Disallow: /test
 Disallow: /.env
 Disallow: /backup/
 
-# Internal API (Red Herring)
 Disallow: /api/internal/
 Disallow: /api/v1/
 
-# Git repository
 Disallow: /.git/
 
-# Sitemap
 Sitemap: /sitemap.xml
