@@ -89,6 +89,7 @@ exec -l $SHELL
 gcloud init
 
 # VM 생성 (테스트/소규모용)
+# 참고: Ephemeral IP 자동 할당 (무료!) - Static IP 불필요
 gcloud compute instances create ctf-server \
     --zone=asia-northeast3-a \
     --machine-type=e2-micro \
@@ -98,6 +99,7 @@ gcloud compute instances create ctf-server \
     --tags=http-server,https-server
 
 # 100명 이상 대회용 (권장!)
+# 참고: Ephemeral IP 자동 할당 (무료!) - Static IP 불필요
 gcloud compute instances create ctf-server \
     --zone=asia-northeast3-a \
     --machine-type=e2-medium \
@@ -403,6 +405,55 @@ sudo systemctl start fail2ban
 
 ## 📈 비용 관리
 
+### 💡 Static IP vs Ephemeral IP (중요!)
+
+**CTF 대회는 Ephemeral IP로 충분합니다!**
+
+| 항목 | Ephemeral IP | Static IP |
+|------|-------------|-----------|
+| **비용** | **무료** ✅ | $3-7/월 💰 |
+| **할당** | VM 시작 시 자동 | 수동 예약 필요 |
+| **VM 중지 시** | IP 해제됨 | IP 유지 (비용 발생) |
+| **CTF 적합성** | **적합** ✅ | 불필요 ❌ |
+
+**Ephemeral IP 사용 플로우 (권장)**:
+```bash
+# 1. 대회 시작 전 (예: 1-2시간 전)
+gcloud compute instances start ctf-server --zone=asia-northeast3-a
+
+# 2. IP 확인 및 참가자에게 공유
+EXTERNAL_IP=$(gcloud compute instances describe ctf-server \
+    --zone=asia-northeast3-a \
+    --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+echo "CTF URL: http://$EXTERNAL_IP:5000"
+
+# 3. 대회 진행 중 VM 유지 (IP 변경 안 됨)
+# ...대회 진행...
+
+# 4. 대회 종료 후 VM 중지 (IP 해제)
+gcloud compute instances stop ctf-server --zone=asia-northeast3-a
+```
+
+**Static IP가 필요한 경우**:
+- DNS 레코드 사전 등록 필요
+- 장기간(1주일+) 운영
+- IP 변경 불가능한 환경
+
+**비용 차이 (e2-medium, 서울, 2일 대회)**:
+```
+Ephemeral IP:
+- VM: $26/월 × (48시간/720시간) = $1.73
+- 네트워크: ~$1
+- 디스크: $0.13
+- 총: ~$2.86 ✅
+
+Static IP 추가 시:
+- 위 비용 + Static IP: $3-7/월
+- 총: ~$5.86-9.86 💰 (2배 이상!)
+```
+
+**결론**: **CTF는 Ephemeral IP 사용하세요! 50-60% 비용 절감!**
+
 ### 무료 티어 확인
 
 ```
@@ -411,7 +462,7 @@ GCP Console > 결제 > 보고서
 
 **무료 한도**:
 - e2-micro 인스턴스: 1개 (US 리전만, asia는 유료)
-- 외부 IP: 1개
+- Ephemeral 외부 IP: 무료 (VM 실행 중)
 - 디스크: 30GB
 - 송신 트래픽: 1GB/월
 
@@ -420,19 +471,40 @@ GCP Console > 결제 > 보고서
 
 ### 비용 절약 팁
 
-1. **리전 선택**:
+1. **Ephemeral IP 사용** ⭐ 최고 절약:
+   - Static IP 예약 안 함 (위 참조)
+   - 50-60% 비용 절감!
+
+2. **리전 선택**:
    - 무료: us-west1 (오레곤)
    - 유료 저렴: asia-northeast3 (서울) - 레이턴시 좋음
 
-2. **사용하지 않을 때 중지**:
+3. **사용하지 않을 때 중지**:
 ```bash
 gcloud compute instances stop ctf-server --zone=asia-northeast3-a
 # 디스크 비용만 발생 (~$2/월)
 ```
 
-3. **예약 할인**:
+4. **예약 할인**:
    - 1년 약정: 37% 할인
    - 3년 약정: 55% 할인
+
+5. **대회 직전 시작, 직후 중지**:
+```bash
+# 대회 1시간 전 시작
+gcloud compute instances start ctf-server --zone=asia-northeast3-a
+
+# 대회 종료 즉시 중지 (시간당 과금이므로 빠를수록 좋음)
+gcloud compute instances stop ctf-server --zone=asia-northeast3-a
+```
+
+**예시 (e2-medium, 100명, 3시간 대회)**:
+```
+- VM 비용: $26/월 × (3시간/720시간) = $0.11
+- 네트워크: ~$0.50
+- 디스크: $0.08 (항상 발생)
+- 총: ~$0.69 (1달러도 안 됨!) 🎉
+```
 
 ---
 
@@ -500,6 +572,8 @@ echo "💻 머신 타입: $MACHINE_TYPE"
 
 # 1. VM 생성
 echo "📦 VM 생성 중..."
+# 참고: --address 옵션 없음 = Ephemeral IP 자동 할당 (무료!)
+# Static IP 사용하려면: --address=STATIC_IP_NAME (비추천, $3-7/월 추가 비용)
 gcloud compute instances create $INSTANCE_NAME \
     --project=$PROJECT_ID \
     --zone=$ZONE \
