@@ -17,10 +17,17 @@
    ```
    이름: ctf-server
    AMI: Ubuntu Server 22.04 LTS
-   인스턴스 유형: t2.micro (프리티어) 또는 t3.small (권장)
+
+   인스턴스 유형:
+   - 개발/테스트: t2.micro (프리티어, 무료)
+   - 블랙박스 CTF 대회 (11/9~11/18):
+     * 중규모 (~100명): t3.large (2 vCPU, 8GB) - $27/10일 ⭐⭐ 추천
+     * 소규모 (~50명): t3.medium (2 vCPU, 4GB) - $15/10일
+     * 대규모 (200명+): c6i.xlarge (4 vCPU, 8GB) - $50/10일
+
    키 페어: 새로 생성 → 다운로드 (.pem 파일)
    네트워크: 퍼블릭 IP 자동 할당 ✓
-   스토리지: 20 GB
+   스토리지: 20 GB (gp3 권장)
    ```
 
 4. **"인스턴스 시작"** 클릭
@@ -155,26 +162,49 @@ sudo swapon /swapfile
 2. A 레코드 추가: `ctf.yourdomain.com → <EC2 IP>`
 3. Nginx + SSL 설정 (상세 가이드: `AWS_DEPLOYMENT.md` 참조)
 
-### 모니터링:
+### 모니터링 (블랙박스 CTF 필수):
 
 ```bash
-# 로그 실시간 보기
-docker compose logs -f
+# 기본 모니터링
+docker compose logs -f        # 로그 실시간 보기
+docker stats                  # 리소스 사용량
+docker compose ps             # 컨테이너 상태
 
-# 리소스 사용량
-docker stats
+# 실시간 대시보드 (대회 중 사용)
+chmod +x monitor.sh
+./monitor.sh                  # CPU, 메모리, 네트워크, 에러 추적
 
-# 컨테이너 상태
-docker compose ps
+# 부하 테스트 (배포 전 필수)
+sudo apt-get install -y apache2-utils
+chmod +x stress_test.sh
+./stress_test.sh 100 200      # 동시 100명, 요청 200회
 ```
+
+**모니터링 체크리스트:**
+- ✅ CPU < 80%
+- ✅ 메모리 < 80%
+- ✅ 응답 시간 < 500ms
+- ✅ 실패율 < 1%
+- ✅ 컨테이너 정상 작동
 
 ---
 
-## 💰 비용
+## 💰 비용 (10일 대회 기준)
 
+**개발/테스트:**
 - **t2.micro (프리티어)**: 무료
-- **t3.small**: 약 $15/월
-- **데이터 전송**: 15GB까지 무료
+
+**블랙박스 CTF 대회 (11/9~11/18, 10일):**
+- **t3.medium (~50명)**: $15
+- **t3.large (~100명)**: $27 ⭐ 추천
+- **c6i.xlarge (200명+)**: $50
+- **데이터 전송**: 첫 100GB 무료, 이후 $0.09/GB
+
+**총 예상 비용**: $27-30 (약 36,000원) for t3.large
+
+**비용 절감 팁:**
+- 대회 종료 즉시 인스턴스 중지
+- CloudWatch 알람 설정 (비용 초과 방지)
 
 ---
 
