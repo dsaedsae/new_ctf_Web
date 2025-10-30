@@ -1,17 +1,9 @@
-# CTF Challenge - Legacy Microservice Exploitation V6.1
+# CTF Challenge - Legacy Microservice Exploitation
 
 MongoDB + Flask 기반 웹 취약점 CTF 문제입니다.
 
 **난이도:** DreamHack Level 7-8
 **예상 풀이 시간:** 90-110분 (블랙박스)
-
-## 🆕 V6.1 변경사항 (AI-Resistant & Natural)
-
-- **분산 힌트를 통한 Secret 유추**: 검증 해시 제거로 자연스러움 향상
-- **Permissions 기반 권한 시스템**: auth_token 제거로 자연스러움 향상
-- **include_inactive/limit 옵션**: mode 파라미터 제거로 자연스러움 향상
-- **Path traversal + 세미콜론 우회**: 현실적인 검증 실수 패턴
-- **완전한 안정성**: 네트워크/시간 의존성 제거
 
 ## 🚀 빠른 배포
 
@@ -88,22 +80,18 @@ docker-compose down
 - `BLIND_RCE=false`: 일반 모드 (RCE 출력 표시)
 - `BLIND_RCE=true`: Hard 모드 (RCE 출력 차단)
 
-## 🎯 취약점 체인 개요
+---
 
-1. **Service Discovery** → 레거시 서비스 발견
-2. **Information Gathering** → 분산된 힌트 수집 (config_backup, health, headers)
-3. **Secret Key Derivation** → Service metadata로부터 secret 유추
-4. **Session Forgery** → Guest → Admin 권한 상승 (Permissions 추가)
-5. **NoSQL Injection** → MongoDB $where + include_inactive/limit 우회
-6. **Command Injection** → Path traversal + 세미콜론 우회
-7. **RCE** → Flag 획득
+## 📌 추가 정보
 
-**특징:**
-- 모든 힌트가 명시적으로 제공됨
-- 네트워크/시간 의존성 없음 (완전 안정적)
-- AI 저항성 높음 (논리적 추론 필요)
-- 자연스러운 실수 패턴 (CTF스럽지 않음)
+이 문제는 레거시 마이크로서비스 환경의 연쇄 취약점을 다룹니다.
+참가자들은 서비스 탐색부터 시작하여 최종 플래그까지 도달해야 합니다.
+
+**권장 환경:**
+- 독립된 네트워크 환경에서 실행
+- 방화벽 설정으로 외부 접근 제한
+- 정기적인 컨테이너 재시작 권장
 
 ---
 
-**CTF 대회 운영자를 위한 간단한 배포 가이드**
+**CTF 대회 운영자를 위한 배포 가이드**
