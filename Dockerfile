@@ -28,6 +28,15 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copy application files
 COPY app.py init_db.py docker-entrypoint.sh ./
+COPY templates/ ./templates/
+COPY static/ ./static/
+
+# Security check: Ensure solution/ directory is not included
+RUN if [ -d "solution" ] || [ -d "/app/solution" ]; then \
+        echo "ERROR: solution/ directory detected in image!" && \
+        echo "This is a security violation - writeups must not be in production!" && \
+        exit 1; \
+    fi
 
 # Fix potential CRLF line endings
 RUN sed -i 's/\r$//' docker-entrypoint.sh || true

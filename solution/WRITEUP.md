@@ -48,7 +48,7 @@ Flask's default secret key derivation can be replicated:
 import hashlib
 salt = "CompanyName2025"
 secret_key = hashlib.sha256(salt.encode()).hexdigest()[:32]
-# Result: 7c4a8d09ca3762af61e59520943dc264
+print(secret_key)
 ```
 
 ### Stage 5: Session Forgery

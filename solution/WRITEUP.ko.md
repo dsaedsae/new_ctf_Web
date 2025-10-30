@@ -48,7 +48,7 @@ Flask의 기본 secret key 유도 방식을 복제할 수 있습니다:
 import hashlib
 salt = "CompanyName2025"
 secret_key = hashlib.sha256(salt.encode()).hexdigest()[:32]
-# 결과: 7c4a8d09ca3762af61e59520943dc264
+print(secret_key)
 ```
 
 ### Stage 5: 세션 위조

@@ -196,13 +196,20 @@ def db_migrate():
     query_filter = request.json.get('filter', {})
     log_file = request.json.get('log_file', '/dev/null')
 
+    # 간단한 입력 검증 (우회 가능)
+    # 일부 위험한 문자 차단 (하지만 세미콜론은 허용)
+    blocked_chars = ['|', '&', '$', '`', '\n', '(', ')']
+    if any(char in log_file for char in blocked_chars):
+        return jsonify({'error': 'Invalid log file path'}), 400
+
     try:
         # 취약점 1: NoSQL Injection
         # 사용자 입력이 MongoDB에 직접 전달됨
         results = list(db.users.find(query_filter).limit(100))
 
         # 조건부 RCE 트리거 - NoSQL injection 성공 시에만 실행
-        if "$where" in query_filter and len(results) > 0:
+        # 엄격한 검증: $where가 실제로 작동하여 모든 사용자를 반환해야 함
+        if "$where" in query_filter and len(results) >= 4:
 
             # 취약점 2: Command Injection
             # 개선됨: 출력 캡처 향상
@@ -304,11 +311,6 @@ def services_ui():
 def service_detail_ui(service_name):
     """서비스 상세 UI (추후 구현 가능)"""
     return render_template('services.html')
-
-@app.route('/legacy', methods=['GET'])
-def legacy_tools_ui():
-    """레거시 도구 UI"""
-    return render_template('legacy_tools.html')
 
 # ============================================================
 # 애플리케이션 진입점
