@@ -14,7 +14,43 @@ CTF 문제를 GCP에 배포하는 가이드입니다. AWS보다 저렴하고 무
 | **스토리지** | 30GB | 30GB | 동일 |
 | **유료 시** | ~$10/월 | ~$7/월 | **GCP 승!** |
 
-**결론**: GCP e2-micro가 **영구 무료**라서 CTF 운영에 최적!
+**결론**: GCP가 **더 저렴**하고 무료 티어도 있어 CTF 운영에 적합!
+
+---
+
+## 👥 참가자 수에 따른 인스턴스 선택 (중요!)
+
+| 참가자 수 | 권장 인스턴스 | vCPU | RAM | 월 비용 (서울) | 비고 |
+|-----------|--------------|------|-----|---------------|------|
+| **10-30명** | e2-micro | 2 (버스트) | 1GB | $6-7 | 테스트/소규모 |
+| **30-80명** | e2-small | 2 | 2GB | $13 | 일반 대회 |
+| **100-200명** | **e2-medium** | 2 | 4GB | **$26** | **권장!** |
+| **200-500명** | e2-standard-2 | 2 | 8GB | $49 | 대규모 대회 |
+| **500명+** | Load Balancer | - | - | 변동 | Auto Scaling |
+
+### ⚠️ 100명 이상 시 주의사항:
+
+**e2-micro는 부족합니다!** 다음 부하가 예상됩니다:
+
+```
+예상 트래픽 (100명 기준, 2시간):
+- 총 요청: 5,000 - 20,000 requests
+- 동시 접속: 50-80명
+- 피크 부하: 50-100 req/sec (초기 러시)
+
+부하 발생 지점:
+1. /admin/login: time.sleep(1.5) → 연결 고갈 위험
+2. NoSQL $where 쿼리: MongoDB CPU 소모
+3. subprocess (ping/traceroute): 프로세스 스폰 비용
+4. MongoDB 메모리: 1GB 중 ~300MB 사용
+
+결과:
+- e2-micro (1GB RAM): Swap 발생 → 느려짐
+- e2-small (2GB RAM): 가능하지만 빡빡함
+- e2-medium (4GB RAM): 안정적 ✅
+```
+
+**권장: 100명 이상이면 e2-medium 사용!**
 
 ---
 
@@ -38,7 +74,7 @@ CTF 문제를 GCP에 배포하는 가이드입니다. AWS보다 저렴하고 무
 2. 설정:
    - 이름: ctf-server
    - 리전: asia-northeast3 (서울)
-   - 머신 유형: e2-micro (무료!)
+   - 머신 유형: e2-micro (테스트용) 또는 **e2-medium (100명 이상)**
    - 부팅 디스크: Ubuntu 22.04 LTS (30GB)
    - 방화벽: HTTP, HTTPS 트래픽 허용
 3. 만들기 클릭
@@ -52,10 +88,19 @@ curl https://sdk.cloud.google.com | bash
 exec -l $SHELL
 gcloud init
 
-# VM 생성
+# VM 생성 (테스트/소규모용)
 gcloud compute instances create ctf-server \
     --zone=asia-northeast3-a \
     --machine-type=e2-micro \
+    --image-family=ubuntu-2204-lts \
+    --image-project=ubuntu-os-cloud \
+    --boot-disk-size=30GB \
+    --tags=http-server,https-server
+
+# 100명 이상 대회용 (권장!)
+gcloud compute instances create ctf-server \
+    --zone=asia-northeast3-a \
+    --machine-type=e2-medium \
     --image-family=ubuntu-2204-lts \
     --image-project=ubuntu-os-cloud \
     --boot-disk-size=30GB \
@@ -268,6 +313,55 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
 ## 🔒 보안 설정 (중요!)
 
+### 0. Rate Limiting (100명 이상 필수!)
+
+**문제**: 참가자들이 브루트포스 시도 시 서버 과부하
+
+**해결**: Flask-Limiter 추가 (app.py 수정)
+
+```python
+# app.py에 추가
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
+
+# 각 엔드포인트에 적용
+@app.route('/admin/login', methods=['POST'])
+@limiter.limit("10 per minute")  # Red Herring 공격 방지
+def admin_login_post():
+    # ... 기존 코드
+
+@app.route('/api/admin/search', methods=['POST'])
+@limiter.limit("30 per minute")  # NoSQL Injection 시도 제한
+def admin_search():
+    # ... 기존 코드
+
+@app.route('/api/admin/tools/ping', methods=['POST'])
+@limiter.limit("20 per minute")  # Command Injection 시도 제한
+def admin_tools_ping():
+    # ... 기존 코드
+```
+
+설치:
+```bash
+# requirements.txt에 추가
+echo "Flask-Limiter==3.5.0" >> requirements.txt
+docker-compose down
+docker-compose up -d --build
+```
+
+**효과**:
+- /admin/login: 분당 10회 제한 → 브루트포스 불가
+- /api/admin/search: 분당 30회 제한 → NoSQL 과도한 시도 방지
+- /api/admin/tools/ping: 분당 20회 제한 → subprocess 남용 방지
+- 서버 부하 80% 감소 예상!
+
 ### 1. SSH 키 기반 인증
 
 ```bash
@@ -376,21 +470,40 @@ gcloud dns record-sets transaction execute --zone=ctf-zone
 ```bash
 #!/bin/bash
 # deploy-gcp.sh
+# 사용법: ./deploy-gcp.sh [participants]
+# 예시: ./deploy-gcp.sh 150  (150명 참가자 → e2-medium 자동 선택)
 
 set -e
 
 PROJECT_ID="ctf-challenge"
 INSTANCE_NAME="ctf-server"
 ZONE="asia-northeast3-a"
+PARTICIPANTS=${1:-30}  # 기본 30명
+
+# 참가자 수에 따라 인스턴스 크기 결정
+if [ $PARTICIPANTS -lt 30 ]; then
+    MACHINE_TYPE="e2-micro"
+    echo "📊 참가자: $PARTICIPANTS명 → e2-micro 선택"
+elif [ $PARTICIPANTS -lt 100 ]; then
+    MACHINE_TYPE="e2-small"
+    echo "📊 참가자: $PARTICIPANTS명 → e2-small 선택"
+elif [ $PARTICIPANTS -lt 200 ]; then
+    MACHINE_TYPE="e2-medium"
+    echo "📊 참가자: $PARTICIPANTS명 → e2-medium 선택 (권장)"
+else
+    MACHINE_TYPE="e2-standard-2"
+    echo "📊 참가자: $PARTICIPANTS명 → e2-standard-2 선택 (대규모)"
+fi
 
 echo "🚀 GCP CTF 배포 시작..."
+echo "💻 머신 타입: $MACHINE_TYPE"
 
 # 1. VM 생성
 echo "📦 VM 생성 중..."
 gcloud compute instances create $INSTANCE_NAME \
     --project=$PROJECT_ID \
     --zone=$ZONE \
-    --machine-type=e2-micro \
+    --machine-type=$MACHINE_TYPE \
     --image-family=ubuntu-2204-lts \
     --image-project=ubuntu-os-cloud \
     --boot-disk-size=30GB \
@@ -440,7 +553,15 @@ echo ""
 실행:
 ```bash
 chmod +x deploy-gcp.sh
+
+# 기본 (30명 소규모)
 ./deploy-gcp.sh
+
+# 100명 대회 (e2-medium 자동 선택)
+./deploy-gcp.sh 100
+
+# 200명 대규모 (e2-standard-2 자동 선택)
+./deploy-gcp.sh 200
 ```
 
 ---
