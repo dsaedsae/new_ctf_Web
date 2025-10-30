@@ -1,21 +1,22 @@
 """
-Legacy Microservice Exploitation V5.0 - Level 7-8
+Legacy Microservice Exploitation V6.1 - Level 7-8
 CTF 문제: 레거시 서비스의 연쇄 취약점 공격
 
 난이도: DreamHack Level 7-8
-예상 풀이 시간: 90-120분 (블랙박스)
+예상 풀이 시간: 90-110분 (블랙박스)
 
-V5.0 수정 사항 (자연스러움 개선):
-- Salt 브루트포스 제거 → Config backup을 통한 직접 secret 노출
-- NoSQL Injection 조건 개선 (인위적 체크 제거)
-- Red Herring 힌트 개선 (오답 유도 개선)
-- Command injection 검증 개선 (더 현실적인 방어)
-- 체이닝 플로우 자연스러움 향상
+V6.1 수정 사항 (AI-Resistant & Natural):
+- 분산 힌트를 통한 Secret 유추 (검증 해시 제거로 자연스러움 향상)
+- Permissions 기반 권한 시스템 (auth_token 제거로 자연스러움 향상)
+- include_inactive/limit 옵션 NoSQL injection (mode 제거로 자연스러움 향상)
+- Path traversal + 세미콜론 우회 (현실적인 검증 실수)
+- 모든 단계가 안정적이고 풀이 가능하며 자연스러움
 """
 
 import hashlib
 import subprocess
 import os
+import time
 from datetime import timedelta
 from flask import Flask, request, jsonify, session, render_template
 from pymongo import MongoClient
@@ -28,7 +29,6 @@ app = Flask(__name__)
 # ============================================================
 
 # Flask secret key (환경변수에서 로드)
-# V5.0: Salt 브루트포스 제거, 직접 secret key 사용
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # 보안: 명시적 설정 필수
@@ -53,6 +53,12 @@ app.config['SESSION_COOKIE_SECURE'] = False  # HTTP only (no TLS)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 app.config['SESSION_REFRESH_EACH_REQUEST'] = False
 
+# Service metadata (secret 유도에 사용)
+SERVICE_NAME = 'legacy-auth-service'
+SERVICE_VERSION = '2.1.0'
+BUILD_DATE = '20240115'
+SERVICE_SALT = 'las2024'  # legacy-auth-service 2024
+
 # ============================================================
 # STAGE 1: 서비스 탐색 (SERVICE DISCOVERY)
 # ============================================================
@@ -76,9 +82,12 @@ def list_services():
             },
             {
                 'name': 'legacy',
-                'version': '1.0.0',
+                'full_name': SERVICE_NAME,
+                'version': SERVICE_VERSION,
+                'build': BUILD_DATE,
                 'status': 'deprecated',
-                'description': 'Legacy endpoints - scheduled for removal'
+                'description': 'Legacy endpoints - scheduled for removal',
+                'salt_prefix': SERVICE_SALT  # 힌트: salt 정보
             }
         ]
     })
@@ -126,33 +135,33 @@ def list_endpoints(service):
 @app.route('/api/legacy/config_backup', methods=['GET'])
 def config_backup():
     """
-    레거시 설정 백업 조회 (실수로 민감한 정보 노출)
+    레거시 설정 백업 조회 (정보 노출)
 
     취약점: 정보 노출 (Information disclosure)
-    실제 시나리오: 개발자가 디버깅을 위해 설정 정보를 노출하다가
-    프로덕션에 그대로 배포된 경우
+    실제 시나리오: 백업 API에 개발 문서가 포함됨
     """
-    # 실수로 secret key 일부를 노출 (개발 중 디버깅 목적)
-    # 레거시 시스템에서 흔히 발생하는 실수
     return jsonify({
         'backup_date': '2024-01-15',
-        'service': 'legacy-auth-service',
+        'service': SERVICE_NAME,
         'config': {
             'database': {
-                'host': 'mongodb://***',
-                'name': 'ctf_db'
+                'connection_string': 'mongodb://***',
+                'pool_size': 10,
+                'timeout': 5000
             },
             'session': {
-                'timeout': '24h',
-                'secure': False,
-                # 실수로 노출된 secret key (앞 16자)
-                # 개발자가 디버깅용으로 추가했다가 제거 안 함
-                'secret_preview': app.secret_key[:16] + '...',
-                'note': 'Using 32-char hex secret key'
+                'algorithm': 'HMAC-SHA256',
+                'key_source': 'derived from service metadata',
+                'format': '32 hex chars',
+                # 개발자 문서 (실수로 포함됨)
+                'sample_generation': 'SHA256(service-build-salt)[:32]',
+                'note': 'Key is deterministically generated from service info'
             },
-            'features': {
-                'legacy_mode': True,
-                'debug_endpoints': False
+            'build': {
+                'service_id': SERVICE_NAME,
+                'version': SERVICE_VERSION,
+                'build_date': BUILD_DATE,
+                'environment': 'production'
             }
         },
         'warning': 'This endpoint is deprecated and will be removed'
@@ -169,11 +178,13 @@ def create_guest_session():
     """
     session['role'] = 'guest'
     session['user'] = 'guest_user'
+    session['permissions'] = ['read']  # 권한 시스템
     session.permanent = True
 
     return jsonify({
         'status': 'guest session created',
-        'role': 'guest'
+        'role': 'guest',
+        'permissions': ['read']
     })
 
 # ============================================================
@@ -186,8 +197,9 @@ def db_migrate():
     데이터베이스 마이그레이션 도구 (관리자 전용)
 
     취약점 체인:
-    1. $where 연산자를 통한 NoSQL Injection
-    2. log_file 파라미터를 통한 Command Injection
+    1. Permissions 기반 권한 검증
+    2. $where 연산자를 통한 NoSQL Injection
+    3. log_file 파라미터를 통한 Command Injection
     """
 
     # 난이도 토글
@@ -195,31 +207,64 @@ def db_migrate():
 
     # Stage 5 체크포인트: 관리자 권한 검증
     if session.get('role') != 'admin':
-        return jsonify({'error': 'Admin required'}), 403
+        return jsonify({'error': 'Admin role required'}), 403
+
+    # Permissions 검증
+    user_perms = session.get('permissions', [])
+    if 'migrate' not in user_perms:
+        return jsonify({
+            'error': 'Insufficient permissions',
+            'required': 'migrate',
+            'your_permissions': user_perms
+        }), 403
 
     # 요청 파라미터 파싱
     query_filter = request.json.get('filter', {})
-    log_file = request.json.get('log_file', '/dev/null')
+    options = request.json.get('options', {})
 
-    # 입력 검증 (더 현실적인 path validation)
-    # 로그 파일은 /var/log/ 또는 /tmp/ 경로만 허용하려고 함
-    # 하지만 path traversal로 우회 가능
-    if not log_file.startswith(('/var/log/', '/tmp/', '/dev/null')):
-        # 간단한 검증만 수행 (../를 체크하지 않음 = 취약점)
-        if any(char in log_file for char in ['|', '&', '`', '\n']):
-            return jsonify({'error': 'Invalid log file path'}), 400
+    # 옵션 파싱
+    limit = options.get('limit', 10)
+    include_inactive = options.get('include_inactive', False)
 
     try:
         # 취약점 1: NoSQL Injection
-        # 사용자 입력이 MongoDB에 직접 전달됨
-        results = list(db.users.find(query_filter).limit(100))
+        # 기본 조건: active 사용자만 (include_inactive로 우회 가능)
+        base_conditions = []
+        if not include_inactive:
+            base_conditions.append({'active': True})
 
-        # V5.0: 인위적 조건 제거, 결과가 있으면 로그 작성 (자연스러움)
-        # 로그 파일 작성은 정상적인 마이그레이션 기능
-        if len(results) > 0:
+        # 쿼리 결합
+        if base_conditions:
+            combined_filter = {
+                '$and': [query_filter] + base_conditions
+            }
+        else:
+            combined_filter = query_filter
+
+        # MongoDB 쿼리 실행
+        results = list(db.users.find(combined_filter).limit(limit))
+
+        # RCE 트리거: 결과가 있고 limit이 충분히 크면 로그 작성
+        if len(results) > 0 and limit >= 100:
+            log_file = request.json.get('log_file', '/dev/null')
+
             # 취약점 2: Command Injection
-            # log_file 파라미터에 대한 검증이 불충분함
-            cmd = f"echo 'Migration started' && echo 'Processing {len(results)} records' > {log_file} 2>&1 && echo 'Migration completed'"
+            # Path validation (하지만 취약점 존재)
+            allowed_dirs = ['/var/log/', '/tmp/']
+            if not any(log_file.startswith(d) for d in allowed_dirs):
+                return jsonify({'error': 'Invalid log directory'}), 400
+
+            # Extension 체크 (하지만 basename 사용 안 함)
+            if not log_file.endswith(('.log', '.txt')):
+                return jsonify({'error': 'Invalid file extension'}), 400
+
+            # 위험한 문자 체크 (세미콜론은 허용 = 취약점)
+            dangerous = ['|', '&', '`', '\n', '$']
+            if any(c in log_file for c in dangerous):
+                return jsonify({'error': 'Invalid characters'}), 400
+
+            # Path normalization 없음 = 취약점
+            cmd = f"echo 'Migration started' && echo 'Migrated {len(results)} records' > {log_file} 2>&1 && echo 'Migration completed'"
 
             result = subprocess.run(
                 cmd,
@@ -245,11 +290,11 @@ def db_migrate():
 
             return jsonify(response_data)
 
-        # 일반 응답 (결과가 없으면 로그 작성 안 함)
+        # 일반 응답 (결과가 없거나 limit이 작음)
         return jsonify({
             'status': 'migration complete',
-            'count': 0,
-            'message': 'No records to migrate'
+            'count': len(results),
+            'message': 'No records migrated' if len(results) == 0 else f'{len(results)} records processed'
         })
 
     except subprocess.TimeoutExpired:
@@ -271,14 +316,17 @@ def db_migrate():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """모니터링용 헬스 체크 (최소 정보만)"""
+    """모니터링용 헬스 체크 (서비스 정보 포함)"""
     try:
         mongo_client.server_info()
 
         return jsonify({
             'status': 'healthy',
             'database': 'connected',
-            'services': ['auth', 'api', 'legacy']
+            'services': ['auth', 'api', 'legacy'],
+            'service': SERVICE_NAME,
+            'version': SERVICE_VERSION,
+            'build_date': BUILD_DATE
         })
     except Exception as e:
         return jsonify({
@@ -286,6 +334,13 @@ def health_check():
             'database': 'disconnected',
             'error': str(e)
         }), 503
+
+# Response header에 salt 정보 추가
+@app.after_request
+def add_headers(response):
+    """모든 응답에 서비스 헤더 추가"""
+    response.headers['X-Service-Salt'] = SERVICE_SALT
+    return response
 
 @app.route('/', methods=['GET'])
 def index():
