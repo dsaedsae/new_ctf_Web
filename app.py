@@ -1,17 +1,16 @@
 """
-Legacy Microservice Exploitation V4.0 - Level 8 Hard Mode
+Legacy Microservice Exploitation V5.0 - Level 7-8
 CTF 문제: 레거시 서비스의 연쇄 취약점 공격
 
-난이도: DreamHack Level 8
-예상 풀이 시간: 120-140분 (블랙박스)
+난이도: DreamHack Level 7-8
+예상 풀이 시간: 90-120분 (블랙박스)
 
-V4.0 수정 사항 (Level 8 강화):
-- Salt 직접 노출 → 힌트 기반 브루트포스 필요
-- system_info 엔드포인트 완전 제거
-- NoSQL Injection 에러 힌트 제거
-- Health check JavaScript 정보 제거
-- Red Herring 엔드포인트 강화 (시간 낭비 유도)
-- robots.txt 및 HTML 힌트 최소화
+V5.0 수정 사항 (자연스러움 개선):
+- Salt 브루트포스 제거 → Config backup을 통한 직접 secret 노출
+- NoSQL Injection 조건 개선 (인위적 체크 제거)
+- Red Herring 힌트 개선 (오답 유도 개선)
+- Command injection 검증 개선 (더 현실적인 방어)
+- 체이닝 플로우 자연스러움 향상
 """
 
 import hashlib
@@ -28,18 +27,18 @@ app = Flask(__name__)
 # 설정 (CONFIGURATION)
 # ============================================================
 
-# Secret 유도 재료 (환경변수에서 로드)
-COMPANY_SALT = os.getenv('COMPANY_SALT')
+# Flask secret key (환경변수에서 로드)
+# V5.0: Salt 브루트포스 제거, 직접 secret key 사용
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # 보안: 명시적 설정 필수
-if not COMPANY_SALT:
+if not SECRET_KEY:
     raise RuntimeError(
-        "COMPANY_SALT 환경변수가 필요합니다! "
+        "SECRET_KEY 환경변수가 필요합니다! "
         ".env 파일 또는 docker-compose.yml에 설정하세요"
     )
 
-# Salt로부터 Flask secret key 유도
-app.secret_key = hashlib.sha256(COMPANY_SALT.encode()).hexdigest()[:32]
+app.secret_key = SECRET_KEY
 
 # MongoDB 연결
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://db:27017/')
@@ -91,9 +90,9 @@ def list_endpoints(service):
     endpoints_map = {
         'legacy': [
             {
-                'path': '/api/legacy/get_salt',
+                'path': '/api/legacy/config_backup',
                 'method': 'GET',
-                'description': 'Legacy utility'
+                'description': 'Configuration backup utility'
             }
         ],
         'auth': [
@@ -124,24 +123,39 @@ def list_endpoints(service):
 # STAGE 2-3: 레거시 엔드포인트 (SECRET 발견)
 # ============================================================
 
-@app.route('/api/legacy/get_salt', methods=['GET'])
-def get_salt():
+@app.route('/api/legacy/config_backup', methods=['GET'])
+def config_backup():
     """
-    Salt 값 힌트 제공 (간접적 정보 노출)
+    레거시 설정 백업 조회 (실수로 민감한 정보 노출)
 
-    취약점: 정보 노출 (Information disclosure) - 하지만 추론 필요
+    취약점: 정보 노출 (Information disclosure)
+    실제 시나리오: 개발자가 디버깅을 위해 설정 정보를 노출하다가
+    프로덕션에 그대로 배포된 경우
     """
-    # Salt를 직접 주지 않고 힌트만 제공
-    salt_hash = hashlib.md5(COMPANY_SALT.encode()).hexdigest()
-
+    # 실수로 secret key 일부를 노출 (개발 중 디버깅 목적)
+    # 레거시 시스템에서 흔히 발생하는 실수
     return jsonify({
-        'message': 'Salt access restricted',
-        'hint': {
-            'format': 'dictionary_word + number',
-            'length': len(COMPANY_SALT),
-            'md5_prefix': salt_hash[:6],  # 검증용
-            'example': 'company2024'
-        }
+        'backup_date': '2024-01-15',
+        'service': 'legacy-auth-service',
+        'config': {
+            'database': {
+                'host': 'mongodb://***',
+                'name': 'ctf_db'
+            },
+            'session': {
+                'timeout': '24h',
+                'secure': False,
+                # 실수로 노출된 secret key (앞 16자)
+                # 개발자가 디버깅용으로 추가했다가 제거 안 함
+                'secret_preview': app.secret_key[:16] + '...',
+                'note': 'Using 32-char hex secret key'
+            },
+            'features': {
+                'legacy_mode': True,
+                'debug_endpoints': False
+            }
+        },
+        'warning': 'This endpoint is deprecated and will be removed'
     })
 
 # ============================================================
@@ -187,23 +201,24 @@ def db_migrate():
     query_filter = request.json.get('filter', {})
     log_file = request.json.get('log_file', '/dev/null')
 
-    # 간단한 입력 검증 (우회 가능)
-    # 일부 위험한 문자 차단 (하지만 세미콜론은 허용)
-    blocked_chars = ['|', '&', '$', '`', '\n', '(', ')']
-    if any(char in log_file for char in blocked_chars):
-        return jsonify({'error': 'Invalid log file path'}), 400
+    # 입력 검증 (더 현실적인 path validation)
+    # 로그 파일은 /var/log/ 또는 /tmp/ 경로만 허용하려고 함
+    # 하지만 path traversal로 우회 가능
+    if not log_file.startswith(('/var/log/', '/tmp/', '/dev/null')):
+        # 간단한 검증만 수행 (../를 체크하지 않음 = 취약점)
+        if any(char in log_file for char in ['|', '&', '`', '\n']):
+            return jsonify({'error': 'Invalid log file path'}), 400
 
     try:
         # 취약점 1: NoSQL Injection
         # 사용자 입력이 MongoDB에 직접 전달됨
         results = list(db.users.find(query_filter).limit(100))
 
-        # 조건부 RCE 트리거 - NoSQL injection 성공 시에만 실행
-        # 엄격한 검증: $where가 실제로 작동하여 모든 사용자를 반환해야 함
-        if "$where" in query_filter and len(results) >= 4:
-
+        # V5.0: 인위적 조건 제거, 결과가 있으면 로그 작성 (자연스러움)
+        # 로그 파일 작성은 정상적인 마이그레이션 기능
+        if len(results) > 0:
             # 취약점 2: Command Injection
-            # 개선됨: 출력 캡처 향상
+            # log_file 파라미터에 대한 검증이 불충분함
             cmd = f"echo 'Migration started' && echo 'Processing {len(results)} records' > {log_file} 2>&1 && echo 'Migration completed'"
 
             result = subprocess.run(
@@ -216,8 +231,7 @@ def db_migrate():
 
             response_data = {
                 'status': 'migration complete',
-                'count': len(results),
-                'mode': 'advanced'  # RCE 경로가 실행되었음을 나타냄
+                'count': len(results)
             }
 
             # 난이도 기반 출력
@@ -231,10 +245,11 @@ def db_migrate():
 
             return jsonify(response_data)
 
-        # 일반 응답 (NoSQL injection이 트리거되지 않음)
+        # 일반 응답 (결과가 없으면 로그 작성 안 함)
         return jsonify({
             'status': 'migration complete',
-            'count': len(results)
+            'count': 0,
+            'message': 'No records to migrate'
         })
 
     except subprocess.TimeoutExpired:
@@ -304,12 +319,13 @@ def admin_login_post():
     username = request.json.get('username', '') if request.json else ''
     password = request.json.get('password', '') if request.json else ''
 
-    # SQL Injection 힌트 (잘못된 방향 유도)
+    # SQL Injection 시도 탐지 (잘못된 방향 유도)
     if "' OR '1'='1" in username or "' OR '1'='1" in password:
+        # V5.0: 정답을 알려주지 않음, 그냥 실패만 시킴
+        time.sleep(1.0)
         return jsonify({
-            'error': 'SQL syntax detected',
-            'hint': 'This is a NoSQL database'
-        }), 400
+            'error': 'Invalid credentials'
+        }), 401
 
     # NoSQL Injection처럼 보이지만 실제로는 아무것도 안 함
     if isinstance(username, dict) or isinstance(password, dict):

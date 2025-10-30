@@ -4,7 +4,6 @@ Allow: /api/v2/
 
 Disallow: /admin
 Disallow: /admin/login
-Disallow: /api/admin/
 
 Disallow: /debug
 Disallow: /test

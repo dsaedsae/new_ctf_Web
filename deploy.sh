@@ -70,11 +70,11 @@ if [ ! -f .env ]; then
         exit 1
     fi
 
-    # COMPANY_SALT 자동 생성
-    RANDOM_SALT=$(openssl rand -hex 16)
-    sed -i "s/^COMPANY_SALT=.*/COMPANY_SALT=${RANDOM_SALT}/" .env
+    # SECRET_KEY 자동 생성 (32 hex characters)
+    RANDOM_SECRET=$(openssl rand -hex 16)
+    sed -i "s/^SECRET_KEY=.*/SECRET_KEY=${RANDOM_SECRET}/" .env
 
-    log_success "랜덤 COMPANY_SALT 생성: ${RANDOM_SALT}"
+    log_success "랜덤 SECRET_KEY 생성: ${RANDOM_SECRET}"
     log_warning "⚠️  .env 파일을 확인하고 FLAG를 설정하세요!"
 
     echo ""
@@ -82,10 +82,10 @@ if [ ! -f .env ]; then
     read
 fi
 
-# COMPANY_SALT 확인
-if ! grep -q "COMPANY_SALT=" .env || grep -q "COMPANY_SALT=$" .env; then
-    log_error "COMPANY_SALT가 설정되지 않았습니다!"
-    log_info ".env 파일에서 COMPANY_SALT를 설정하세요"
+# SECRET_KEY 확인
+if ! grep -q "SECRET_KEY=" .env || grep -q "SECRET_KEY=$" .env; then
+    log_error "SECRET_KEY가 설정되지 않았습니다!"
+    log_info ".env 파일에서 SECRET_KEY를 설정하세요"
     exit 1
 fi
 
