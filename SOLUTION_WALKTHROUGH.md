@@ -465,15 +465,28 @@ curl -X POST http://ctf.challenge.com:5000/api/auth/guest -c cookies.txt -v
 ```
 
 **결과**:
-```http
-HTTP/1.1 200 OK
-Set-Cookie: session=.eJyrVoovSC3KTcxLzStRsiopKk3VUSrKz0lVslJKL00tLlHSUSotTi2CcePBnFoADnQTGw.ZqK3HA.Xm8vZN2Pg_9rQ7Kh3vY8sL2Bw4c; Path=/
-
-{
-  "status": "guest session created",
-  "role": "guest"
-}
-```
+* Host localhost:5000 was resolved.
+* IPv6: ::1
+* IPv4: 127.0.0.1
+*   Trying [::1]:5000...
+* Connected to localhost (::1) port 5000
+> POST /api/auth/guest HTTP/1.1
+> Host: localhost:5000
+> User-Agent: curl/8.5.0
+> Accept: */*
+>
+< HTTP/1.1 200 OK
+< Server: gunicorn
+< Date: Thu, 30 Oct 2025 10:40:15 GMT
+< Connection: keep-alive
+< Content-Type: application/json
+< Content-Length: 50
+< Vary: Cookie
+* Added cookie session=".eJyrVoovSC3KTcxLzStRsiopKk3VUSrKz0lVslJKL00tLlHSUSotTi2CcePBnFoADnQTGw.aQNAjw.srHgU-S-hAt7e7F3HurCPVyiDzY" for domain localhost, path /, expire 1761907215
+< Set-Cookie: session=.eJyrVoovSC3KTcxLzStRsiopKk3VUSrKz0lVslJKL00tLlHSUSotTi2CcePBnFoADnQTGw.aQNAjw.srHgU-S-hAt7e7F3HurCPVyiDzY; Expires=Fri, 31 Oct 2025 10:40:15 GMT; HttpOnly; Path=/; SameSite=Lax
+<
+{"role":"guest","status":"guest session created"}
+* Connection #0 to host localhost left intact
 
 ### 참가자의 사고:
 > "게스트 세션을 얻었다. 이 세션 쿠키를 디코딩해서 구조를 확인해보자."
@@ -485,15 +498,12 @@ Set-Cookie: session=.eJyrVoovSC3KTcxLzStRsiopKk3VUSrKz0lVslJKL00tLlHSUSotTi2CceP
 pip3 install flask-unsign
 
 # 세션 디코딩
-flask-unsign --decode --cookie ".eJyrVoovSC3KTcxLzStRsiopKk3VUSrKz0lVslJKL00tLlHSUSotTi2CcePBnFoADnQTGw.ZqK3HA.Xm8vZN2Pg_9rQ7Kh3vY8sL2Bw4c"
+flask-unsign --decode --cookie ".eJyrVoovSC3KTcxLzStRsiopKk3VUSrKz0lVslJKL00tLlHSUSotTi2CcePBnFoADnQTGw.aQNAjw.srHgU-S-hAt7e7F3HurCPVyiDzY"
 ```
 
 **결과**:
-```json
-{
-  "role": "guest",
-  "user": "guest_user"
-}
+```
+{'_permanent': True, 'role': 'guest', 'user': 'guest_user'}
 ```
 
 ### 참가자의 사고:
