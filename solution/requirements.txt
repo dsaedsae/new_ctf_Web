@@ -1,6 +1,0 @@
-# Exploit Script Dependencies
-# Install with: pip install -r requirements.txt
-
-requests==2.31.0
-itsdangerous==2.1.2
-colorama==0.4.6  # For cross-platform colored output

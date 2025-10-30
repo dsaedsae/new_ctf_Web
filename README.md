@@ -1,41 +1,77 @@
-# Legacy Microservice 공격 (Level 8 Hard Mode)
+# CTF Challenge - Legacy Microservice Exploitation
 
-## 문제 설명
+MongoDB + Flask 기반 웹 취약점 CTF 문제입니다.
 
-우리 회사의 마이크로서비스 플랫폼은 수년간 운영되어 왔습니다. 최근 일부 레거시 엔드포인트가 제대로 폐기되지 않은 것을 발견했습니다. 보안 감사의 일환으로, 이러한 엔드포인트의 취약점을 테스트하고 시스템에 접근해 주시기 바랍니다.
+## 🚀 빠른 배포
 
-이 플랫폼은 여러 서비스로 구성된 표준 REST API 아키텍처를 사용합니다. 철저한 정찰과 분석이 필요합니다.
+### 1. 환경 설정
 
-## 접속 정보
+```bash
+# .env 파일 생성
+cp .env.example .env
 
-- **대상 URL**: `http://challenge.ctf.local:5000`
+# .env 파일 편집 (필수!)
+nano .env
+```
 
-## 힌트
+**.env 설정 항목:**
+- `COMPANY_SALT`: 랜덤 값 설정 (필수)
+- `FLAG`: 커스텀 플래그 설정 (필수)
+- `BLIND_RCE`: 난이도 설정 (false/true)
 
-1. 철저한 열거(enumeration)가 성공의 열쇠입니다
-2. 레거시 시스템에는 종종 잊혀진 비밀이 숨겨져 있습니다
-3. 취약점들을 연결(chain)해야 합니다
-4. 브루트포스와 추론 능력이 필요합니다
+### 2. Docker Compose로 실행
 
-## Flag 형식
+```bash
+docker-compose up -d
+```
 
-`FLAG{...}`
+### 3. 접속 확인
 
-## 난이도
+```
+http://localhost:5000
+```
 
-⭐⭐⭐⭐⭐ (5/5) - **DreamHack Level 8**
-**예상 풀이 시간**: 2-2.5 시간 (블랙박스)
+## 📋 시스템 요구사항
+
+- Docker & Docker Compose
+- MongoDB 4.4 (자동 설치됨)
+- 포트 5000 사용 가능
+
+## ⚙️ 환경 변수
+
+| 변수 | 필수 | 설명 |
+|------|------|------|
+| `COMPANY_SALT` | ✅ | 세션 키 생성용 Salt |
+| `FLAG` | ✅ | CTF 플래그 |
+| `CTF_PORT` | ❌ | 포트 (기본: 5000) |
+| `BLIND_RCE` | ❌ | Blind RCE 모드 (기본: false) |
+
+## 🔒 보안 주의사항
+
+⚠️ **절대 공개하지 마세요:**
+- `.env` 파일
+- `COMPANY_SALT` 값
+- `FLAG` 값
+
+## 📝 배포 스크립트 사용 (선택)
+
+```bash
+./deploy.sh
+```
+
+자동으로 환경을 설정하고 컨테이너를 실행합니다.
+
+## 🛑 종료
+
+```bash
+docker-compose down
+```
+
+## 📊 난이도 설정
+
+- `BLIND_RCE=false`: 일반 모드
+- `BLIND_RCE=true`: Hard 모드 (출력 차단)
 
 ---
 
-*참고: 이 문제는 여러 단계로 구성되어 있습니다. 시스템을 충분히 열거하고 이해하는 데 시간을 투자하세요.*
-
-## 기술 요구사항
-
-### MongoDB 버전
-이 CTF는 **MongoDB 4.4**를 사용합니다. 이유:
-- MongoDB 4.4는 NoSQL Injection 학습에 적합한 환경을 제공합니다
-- 프로덕션 환경에서 흔히 사용되는 안정적인 버전입니다
-- MongoDB 5.0+에서는 일부 호환성 문제가 있을 수 있습니다
-
-**주의**: MongoDB 5.0+ 버전으로 실행하면 컨테이너 시작이 실패할 수 있습니다!
+**CTF 대회 운영자를 위한 간단한 배포 가이드**
