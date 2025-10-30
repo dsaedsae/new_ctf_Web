@@ -16,7 +16,7 @@ import hashlib
 import subprocess
 import os
 from datetime import timedelta
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, render_template
 from pymongo import MongoClient
 import pymongo.errors
 
@@ -292,12 +292,23 @@ def health_check():
 
 @app.route('/', methods=['GET'])
 def index():
-    """루트 엔드포인트"""
-    return jsonify({
-        'message': 'Microservice Platform API',
-        'version': '2.0',
-        'documentation': '/api/v2/services'
-    })
+    """메인 대시보드 UI"""
+    return render_template('index.html')
+
+@app.route('/services', methods=['GET'])
+def services_ui():
+    """서비스 목록 UI"""
+    return render_template('services.html')
+
+@app.route('/services/<service_name>', methods=['GET'])
+def service_detail_ui(service_name):
+    """서비스 상세 UI (추후 구현 가능)"""
+    return render_template('services.html')
+
+@app.route('/legacy', methods=['GET'])
+def legacy_tools_ui():
+    """레거시 도구 UI"""
+    return render_template('legacy_tools.html')
 
 # ============================================================
 # 애플리케이션 진입점

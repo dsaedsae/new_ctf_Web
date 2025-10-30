@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Microservice Platform{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="display-5">Platform Dashboard</h1>
+            <p class="lead text-muted">Microservice Management & Monitoring</p>
+        </div>
+    </div>
+
+    <!-- Status Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body">
+                    <h5 class="card-title text-success">
+                        <i class="bi bi-check-circle-fill"></i> System Status
+                    </h5>
+                    <p class="card-text display-6">Operational</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-primary">
+                <div class="card-body">
+                    <h5 class="card-title text-primary">
+                        <i class="bi bi-hdd-network-fill"></i> Active Services
+                    </h5>
+                    <p class="card-text display-6">3</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info">
+                <div class="card-body">
+                    <h5 class="card-title text-info">
+                        <i class="bi bi-server"></i> API Version
+                    </h5>
+                    <p class="card-text display-6">v2.0</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body">
+                    <h5 class="card-title text-warning">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Deprecated
+                    </h5>
+                    <p class="card-text display-6">1</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Services Overview -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Service Overview</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Service</th>
+                                    <th>Version</th>
+                                    <th>Status</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>auth</strong></td>
+                                    <td>v2.1.0</td>
+                                    <td><span class="badge bg-success">Active</span></td>
+                                    <td>Authentication service</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>api</strong></td>
+                                    <td>v2.0.5</td>
+                                    <td><span class="badge bg-success">Active</span></td>
+                                    <td>Main API gateway</td>
+                                </tr>
+                                <tr class="table-warning">
+                                    <td><strong>legacy</strong></td>
+                                    <td>v1.0.0</td>
+                                    <td><span class="badge bg-warning">Deprecated</span></td>
+                                    <td>Legacy endpoints - scheduled for removal</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="d-grid">
+                        <a href="/services" class="btn btn-outline-primary">View All Services</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Quick Links -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Quick Links</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="/services" class="btn btn-outline-primary">
+                            <i class="bi bi-list-ul"></i> Service Directory
+                        </a>
+                        <a href="/legacy" class="btn btn-outline-warning">
+                            <i class="bi bi-archive"></i> Legacy Tools
+                        </a>
+                        <a href="/api/v2/services" class="btn btn-outline-secondary" target="_blank">
+                            <i class="bi bi-code-square"></i> API Documentation
+                        </a>
+                        <a href="/health" class="btn btn-outline-success" target="_blank">
+                            <i class="bi bi-heart-pulse"></i> Health Check
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notifications -->
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">System Notices</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning mb-0" role="alert">
+                        <strong>Notice:</strong> Legacy service endpoints are scheduled for deprecation. Please migrate to v2 APIs.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

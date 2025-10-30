@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Services - Microservice Platform{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="display-5">Service Directory</h1>
+            <p class="lead text-muted">Available microservices and their endpoints</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Auth Service -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-shield-lock-fill"></i> Authentication Service
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <span class="badge bg-success">Active</span>
+                        <span class="badge bg-secondary">v2.1.0</span>
+                    </div>
+                    <p class="card-text">Handles user authentication and session management.</p>
+
+                    <h6 class="mt-3">Endpoints:</h6>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">
+                            <code>POST /api/auth/guest</code>
+                            <br><small class="text-muted">Guest session creation</small>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="/services/auth" class="btn btn-sm btn-outline-success">View Details</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Service -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-cloud-arrow-up-fill"></i> API Gateway
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <span class="badge bg-success">Active</span>
+                        <span class="badge bg-secondary">v2.0.5</span>
+                    </div>
+                    <p class="card-text">Main API gateway for service discovery and routing.</p>
+
+                    <h6 class="mt-3">Endpoints:</h6>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">
+                            <code>GET /api/v2/services</code>
+                            <br><small class="text-muted">Service discovery</small>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="/services/api" class="btn btn-sm btn-outline-primary">View Details</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legacy Service -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="bi bi-archive-fill"></i> Legacy Service
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <span class="badge bg-warning text-dark">Deprecated</span>
+                        <span class="badge bg-secondary">v1.0.0</span>
+                    </div>
+                    <p class="card-text">Legacy endpoints scheduled for removal. Use with caution.</p>
+
+                    <h6 class="mt-3">Endpoints:</h6>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">
+                            <code>GET /api/legacy/get_salt</code>
+                            <br><small class="text-muted">Legacy utility</small>
+                        </li>
+                        <li class="list-group-item">
+                            <code>GET /api/legacy/system_info</code>
+                            <br><small class="text-muted">System information</small>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="/services/legacy" class="btn btn-sm btn-outline-warning">View Details</a>
+                    <a href="/legacy" class="btn btn-sm btn-warning">Access Tools</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Section (Hidden) -->
+    <div class="row mt-4">
+        <div class="col">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-lock-fill"></i> Administrative Endpoints
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">These endpoints require administrator privileges.</p>
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <code>POST /api/admin/db/migrate</code>
+                                <br><small class="text-muted">Database migration tool</small>
+                            </div>
+                            <span class="badge bg-danger">Admin Only</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
