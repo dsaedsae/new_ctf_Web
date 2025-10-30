@@ -1,0 +1,19 @@
+User-agent: *
+
+Allow: /api/v2/
+
+Disallow: /admin
+Disallow: /admin/login
+Disallow: /api/admin/
+
+Disallow: /debug
+Disallow: /test
+Disallow: /.env
+Disallow: /backup/
+
+Disallow: /api/internal/
+Disallow: /api/v1/
+
+Disallow: /.git/
+
+Sitemap: /sitemap.xml
