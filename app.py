@@ -67,6 +67,13 @@ def list_services():
                 'status': 'deprecated',
                 'description': 'Legacy endpoints - scheduled for removal',
                 'salt_prefix': SERVICE_SALT
+            },
+            {
+                'name': 'admin',
+                'version': '1.0.0',
+                'status': 'restricted',
+                'description': 'Administrative tools',
+                'access': 'Admin authentication required'
             }
         ]
     })
@@ -95,6 +102,14 @@ def list_endpoints(service):
                 'path': '/api/v2/services',
                 'method': 'GET',
                 'description': 'Service discovery'
+            }
+        ],
+        'admin': [
+            {
+                'path': '/api/admin/db/migrate',
+                'method': 'POST',
+                'description': 'Database migration tool',
+                'access': 'Admin role and migrate permission required'
             }
         ]
     }
