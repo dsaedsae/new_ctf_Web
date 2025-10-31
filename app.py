@@ -174,8 +174,6 @@ def create_guest_session():
 def db_migrate():
     """데이터베이스 마이그레이션 도구 (관리자 전용)"""
 
-    BLIND_RCE = os.getenv('BLIND_RCE', 'false').lower() == 'true'
-
     if session.get('role') != 'admin':
         return jsonify({'error': 'Admin role required'}), 403
 
@@ -236,12 +234,11 @@ def db_migrate():
                 'count': len(results)
             }
 
-            if not BLIND_RCE:
-                output = result.stdout + result.stderr
-                if output:
-                    response_data['log_output'] = output
-                elif result.returncode == 0:
-                    response_data['log_output'] = 'Command executed successfully'
+            output = result.stdout + result.stderr
+            if output:
+                response_data['log_output'] = output
+            elif result.returncode == 0:
+                response_data['log_output'] = 'Command executed successfully'
 
             return jsonify(response_data)
 

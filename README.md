@@ -20,7 +20,6 @@ nano .env
 **.env 설정 항목:**
 - `SECRET_KEY`: Flask secret key (32 hex chars, 필수)
 - `FLAG`: 커스텀 플래그 설정 (필수)
-- `BLIND_RCE`: 난이도 설정 (false/true)
 
 **SECRET_KEY 생성 예시:**
 ```bash
@@ -52,7 +51,6 @@ http://localhost:5000
 | `SECRET_KEY` | ✅ | Flask secret key (32 hex chars) |
 | `FLAG` | ✅ | CTF 플래그 |
 | `CTF_PORT` | ❌ | 포트 (기본: 5000) |
-| `BLIND_RCE` | ❌ | Blind RCE 모드 (기본: false) |
 
 ## 🔒 보안 주의사항
 
@@ -74,11 +72,6 @@ http://localhost:5000
 ```bash
 docker-compose down
 ```
-
-## 📊 난이도 설정
-
-- `BLIND_RCE=false`: 일반 모드 (RCE 출력 표시)
-- `BLIND_RCE=true`: Hard 모드 (RCE 출력 차단)
 
 ---
 
