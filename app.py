@@ -13,13 +13,14 @@ app = Flask(__name__)
 # 설정 (CONFIGURATION)
 # ============================================================
 
-SECRET_KEY = os.getenv('SECRET_KEY')
+SERVICE_NAME = 'legacy-auth-service'
+SERVICE_VERSION = '2.1.0'
+BUILD_DATE = '20240115'
+SERVICE_SALT = 'las2024'
 
-if not SECRET_KEY:
-    raise RuntimeError(
-        "SECRET_KEY 환경변수가 필요합니다! "
-        ".env 파일 또는 docker-compose.yml에 설정하세요"
-    )
+# SECRET_KEY 자동 생성 (서비스 메타데이터 기반)
+combined = f"{SERVICE_NAME}-{BUILD_DATE}-{SERVICE_SALT}"
+SECRET_KEY = hashlib.sha256(combined.encode()).hexdigest()[:32]
 
 app.secret_key = SECRET_KEY
 
@@ -32,11 +33,6 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 app.config['SESSION_REFRESH_EACH_REQUEST'] = False
-
-SERVICE_NAME = 'legacy-auth-service'
-SERVICE_VERSION = '2.1.0'
-BUILD_DATE = '20240115'
-SERVICE_SALT = 'las2024'
 
 # ============================================================
 # 서비스 API

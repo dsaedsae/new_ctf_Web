@@ -16,7 +16,6 @@ services:
       - ctfnet
     environment:
       - MONGO_URI=mongodb://db:27017/
-      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set in .env file}
       - FLAG=${FLAG:-FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}}
     restart: unless-stopped
     # Removed healthcheck - using Dockerfile's superior HEALTHCHECK

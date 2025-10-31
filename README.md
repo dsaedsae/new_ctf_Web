@@ -18,13 +18,10 @@ nano .env
 ```
 
 **.env 설정 항목:**
-- `SECRET_KEY`: Flask secret key (32 hex chars, 필수)
 - `FLAG`: 커스텀 플래그 설정 (필수)
+- `CTF_PORT`: 포트 번호 (선택, 기본: 5000)
 
-**SECRET_KEY 생성 예시:**
-```bash
-openssl rand -hex 16
-```
+**Note:** SECRET_KEY는 서비스 메타데이터로부터 자동 생성됩니다.
 
 ### 2. Docker Compose로 실행
 
@@ -48,15 +45,15 @@ http://localhost:5000
 
 | 변수 | 필수 | 설명 |
 |------|------|------|
-| `SECRET_KEY` | ✅ | Flask secret key (32 hex chars) |
 | `FLAG` | ✅ | CTF 플래그 |
 | `CTF_PORT` | ❌ | 포트 (기본: 5000) |
+
+**Note:** SECRET_KEY는 코드에서 자동으로 생성됩니다 (`SHA256(service-build-salt)[:32]`)
 
 ## 🔒 보안 주의사항
 
 ⚠️ **절대 공개하지 마세요:**
 - `.env` 파일
-- `SECRET_KEY` 값
 - `FLAG` 값
 
 ## 📝 배포 스크립트 사용 (선택)
