@@ -13,20 +13,24 @@ app = Flask(__name__)
 # 설정 (CONFIGURATION)
 # ============================================================
 
-SERVICE_NAME = 'legacy-auth-service'
-SERVICE_VERSION = '2.1.0'
-BUILD_DATE = '20240115'
-SERVICE_SALT = 'las2024'
+SECRET_KEY = os.getenv('SECRET_KEY')
 
-# SECRET_KEY 자동 생성 (서비스 메타데이터 기반)
-combined = f"{SERVICE_NAME}-{BUILD_DATE}-{SERVICE_SALT}"
-SECRET_KEY = hashlib.sha256(combined.encode()).hexdigest()[:32]
+if not SECRET_KEY:
+    raise RuntimeError(
+        "SECRET_KEY 환경변수가 필요합니다! "
+        ".env 파일 또는 docker-compose.yml에 설정하세요"
+    )
 
 app.secret_key = SECRET_KEY
 
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://db:27017/')
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client.ctf_db
+
+SERVICE_NAME = 'legacy-auth-service'
+SERVICE_VERSION = '2.1.0'
+BUILD_DATE = '20240115'
+SERVICE_SALT = 'las2024'
 app.config['DEBUG'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
