@@ -13,10 +13,8 @@ app = Flask(__name__)
 # 설정 (CONFIGURATION)
 # ============================================================
 
-# Flask secret key (환경변수에서 로드)
 SECRET_KEY = os.getenv('SECRET_KEY')
 
-# 보안: 명시적 설정 필수
 if not SECRET_KEY:
     raise RuntimeError(
         "SECRET_KEY 환경변수가 필요합니다! "
@@ -25,24 +23,20 @@ if not SECRET_KEY:
 
 app.secret_key = SECRET_KEY
 
-# MongoDB 연결
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://db:27017/')
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client.ctf_db
-
-# 보안 설정
 app.config['DEBUG'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = False  # HTTP only (no TLS)
+app.config['SESSION_COOKIE_SECURE'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 app.config['SESSION_REFRESH_EACH_REQUEST'] = False
 
-# Service metadata (secret 유도에 사용)
 SERVICE_NAME = 'legacy-auth-service'
 SERVICE_VERSION = '2.1.0'
 BUILD_DATE = '20240115'
-SERVICE_SALT = 'las2024'  # legacy-auth-service 2024
+SERVICE_SALT = 'las2024'
 
 # ============================================================
 # 서비스 API
@@ -72,7 +66,7 @@ def list_services():
                 'build': BUILD_DATE,
                 'status': 'deprecated',
                 'description': 'Legacy endpoints - scheduled for removal',
-                'salt_prefix': SERVICE_SALT  # 힌트: salt 정보
+                'salt_prefix': SERVICE_SALT
             }
         ]
     })
