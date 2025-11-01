@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Microservice Platform{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center mt-5">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-shield-lock-fill"></i> Administrator Login
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form id="loginForm">
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Username</label>
+                            <input type="text" class="form-control" id="username" placeholder="Enter username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="password" placeholder="Enter password" required>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-box-arrow-in-right"></i> Login
+                            </button>
+                        </div>
+                    </form>
+                    <div id="loginMessage" class="mt-3"></div>
+                </div>
+                <div class="card-footer text-muted text-center">
+                    <small>Internal use only</small>
+                </div>
+            </div>
+
+            <!-- Red Herring: Fake hint in HTML comment -->
+            <!-- DEPRECATED: Traditional login disabled in v2.0 -->
+            <!-- Migration to session-based authentication complete -->
+            <!-- See /api/auth/* endpoints for new authentication flow -->
+            <!-- Legacy credentials (admin/admin123) no longer valid -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const messageDiv = document.getElementById('loginMessage');
+    messageDiv.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div> Authenticating...';
+
+    // Red Herring: Fake authentication that always fails
+    setTimeout(function() {
+        messageDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <strong>Authentication failed.</strong><br>
+                Invalid credentials or account locked.
+            </div>
+        `;
+    }, 2000);
+});
+</script>
+{% endblock %}
