@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+
+# Docker volumes
+mongo_data/
+
+# Test files
+test_*.py
+*_test.py
+debug_*.py
+cookies.txt
+*_cookies.txt
+complete_test.py
+full_exploit.py
+
+# Claude AI
+.claude/
