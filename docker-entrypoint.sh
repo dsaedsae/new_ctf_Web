@@ -21,6 +21,14 @@ python3 init_db.py || {
 
 echo "[1/2] 데이터베이스 초기화 완료 ✓"
 
+# 단계 1.5: FLAG 파일 생성
+if [ -n "$FLAG" ]; then
+    echo "$FLAG" > /flag.txt
+    echo "[*] FLAG 파일 생성됨: /flag.txt"
+else
+    echo "[경고] FLAG 환경 변수가 설정되지 않음!"
+fi
+
 # 단계 2: gevent worker로 웹 서버 시작
 echo "[2/2] Gunicorn 웹 서버 시작 중 (gevent 모드)..."
 exec gunicorn \

