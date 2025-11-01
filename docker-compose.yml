@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # Web application
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ctf_web
+    ports:
+      - "${CTF_PORT:-5000}:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ctfnet
+    environment:
+      - MONGO_URI=mongodb://db:27017/
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set in .env file}
+      - FLAG=${FLAG:-FLAG{l3g4cy_s3rv1c3s_4r3_d4ng3r0us_wh3n_f0rg0tt3n}}
+    restart: unless-stopped
+    # Removed healthcheck - using Dockerfile's superior HEALTHCHECK
+
+  # MongoDB database
+  db:
+    image: mongo:4.4
+    container_name: ctf_db
+    # CRITICAL - Enable JavaScript for $where operator
+    # MongoDB 4.4 has JavaScript enabled by default
+    # Using --noauth for CTF environment (no authentication required)
+    command: mongod --noauth
+    networks:
+      - ctfnet
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      # MongoDB 4.4 uses 'mongo' command (not 'mongosh')
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+
+networks:
+  ctfnet:
+    driver: bridge
+    name: ctf_network
+
+volumes:
+  mongo_data:
+    name: ctf_mongodb_data
