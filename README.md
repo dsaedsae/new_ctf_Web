@@ -2,6 +2,14 @@
 
 ## Quick Start
 
+1. **Setup environment variables:**
+```bash
+cp .env.example .env
+# Generate a random JWT secret
+python3 -c "import secrets; print('JWT_SECRET=' + secrets.token_urlsafe(64))" >> .env
+```
+
+2. **Start the services:**
 ```bash
 docker-compose up -d
 ```
