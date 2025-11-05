@@ -1,0 +1,42 @@
+# CTF Solutions & Documentation (운영자용 - 배포에서 제외)
+docs/
+WRITEUP.md
+DEPLOYMENT.md
+PROBLEM_DESCRIPTION.md
+
+# Keep README.md for participants
+!README.md
+
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env.local
+.env.*.local
