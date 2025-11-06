@@ -7,6 +7,7 @@ import uuid
 import hashlib
 import requests
 import sqlite3
+import ipaddress
 from datetime import datetime, timedelta
 from urllib.parse import urlparse, parse_qs, urlencode
 from collections import defaultdict
@@ -109,6 +110,82 @@ def init_database():
 
 # Initialize database
 init_database()
+
+def is_ssrf_blocked(url):
+    """
+    강화된 SSRF 필터 - 대부분의 우회 기법 차단
+    하지만 IPv6 full notation은 놓침 (의도된 취약점)
+    """
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+
+        if not hostname:
+            return True
+
+        hostname_lower = hostname.lower()
+
+        # 1. localhost 변형들 차단
+        localhost_variants = [
+            'localhost', 'localhost.localdomain',
+            '127.0.0.1', '127.1', '127.0.1', '0.0.0.0',
+            '0', '0x7f000001', '0177.0.0.1', '2130706433',
+            '[::1]', '[::ffff:127.0.0.1]',  # IPv6 축약형만 차단!
+        ]
+
+        if hostname_lower in localhost_variants:
+            return True
+
+        # 2. 내부망 IP 대역 차단 (IPv4)
+        private_ranges = [
+            '192.168.', '10.', '172.16.', '172.17.', '172.18.', '172.19.',
+            '172.20.', '172.21.', '172.22.', '172.23.', '172.24.', '172.25.',
+            '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.',
+            '169.254.',  # link-local
+        ]
+
+        for prefix in private_ranges:
+            if hostname_lower.startswith(prefix):
+                return True
+
+        # 3. 127.x.x.x 대역 전체 차단
+        if hostname_lower.startswith('127.'):
+            return True
+
+        # 4. IP 주소 파싱 및 검증
+        try:
+            # 대괄호 제거 (IPv6용)
+            clean_hostname = hostname.strip('[]')
+            ip = ipaddress.ip_address(clean_hostname)
+
+            # IPv4 체크
+            if isinstance(ip, ipaddress.IPv4Address):
+                if ip.is_private or ip.is_loopback or ip.is_reserved:
+                    return True
+
+            # IPv6 체크 (여기가 핵심 취약점!)
+            # 축약형 ::1은 위에서 문자열로 차단했지만
+            # 전체 표기 0:0:0:0:0:0:0:1은 정규화 후 체크를 놓침!
+            elif isinstance(ip, ipaddress.IPv6Address):
+                # 축약형만 차단하고 full notation은 놓침
+                if '::1' in hostname_lower or '::ffff:127' in hostname_lower:
+                    return True
+                # 🔥 여기가 버그! ip.is_loopback 체크를 안함!
+
+        except ValueError:
+            # IP가 아닌 도메인일 수 있음
+            pass
+
+        # 5. auth-server, resource-server 등 내부 호스트명 차단
+        internal_hosts = ['auth-server', 'resource-server', 'client', 'nginx']
+        if hostname_lower in internal_hosts:
+            return True
+
+        return False
+
+    except Exception as e:
+        # 파싱 실패 시 안전하게 차단
+        return True
 
 def get_db_connection():
     conn = sqlite3.connect('/app/data/oauth_ctf.db')
@@ -329,8 +406,33 @@ def oauth_register():
                 'provided': logo_uri
             }), 400
 
+        # SSRF 필터 적용
+        if is_ssrf_blocked(logo_uri):
+            return jsonify({
+                'error': 'ssrf_blocked',
+                'message': 'Access to localhost and private networks is blocked for security reasons',
+                'hint': 'Make sure your logo URL points to a public server',
+                'provided': logo_uri
+            }), 403
+
         try:
-            logo_response = requests.get(logo_uri, timeout=5)
+            # IPv6 loopback을 IPv4로 변환 (Docker 환경에서 IPv6가 제대로 동작하지 않을 수 있음)
+            actual_uri = logo_uri
+            parsed = urlparse(logo_uri)
+            if parsed.hostname:
+                try:
+                    # IPv6 주소 파싱
+                    clean_hostname = parsed.hostname.strip('[]')
+                    ip = ipaddress.ip_address(clean_hostname)
+
+                    # IPv6 loopback이면 127.0.0.1로 변환
+                    if isinstance(ip, ipaddress.IPv6Address) and ip.is_loopback:
+                        actual_uri = logo_uri.replace(f'[{clean_hostname}]', '127.0.0.1')
+                except:
+                    pass
+
+            # 리다이렉트 차단
+            logo_response = requests.get(actual_uri, timeout=5, allow_redirects=False)
             logo_fetch_result = {
                 'status': logo_response.status_code,
                 'content': logo_response.text[:1000]
