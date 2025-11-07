@@ -16,6 +16,12 @@ import jwt
 from flask import Flask, request, jsonify, render_template_string, redirect, session, make_response, Response
 from flask_cors import CORS
 
+# RSA key generation for JWT Algorithm Confusion vulnerability
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
+import base64
+
 app = Flask(__name__)
 app.secret_key = 'oauth_ctf_advanced_2025_secret'
 CORS(app)
@@ -26,6 +32,30 @@ login_attempts = defaultdict(list)
 import secrets
 JWT_SECRET = os.getenv('JWT_SECRET', secrets.token_urlsafe(64))
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8080')
+
+# Generate RSA key pair for RS256 signing
+print("[INIT] Generating RSA key pair for JWT signing...")
+PRIVATE_KEY = rsa.generate_private_key(
+    public_exponent=65537,
+    key_size=2048,
+    backend=default_backend()
+)
+
+PUBLIC_KEY = PRIVATE_KEY.public_key()
+
+# Convert to PEM format
+PUBLIC_KEY_PEM = PUBLIC_KEY.public_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PublicFormat.SubjectPublicKeyInfo
+).decode('utf-8')
+
+PRIVATE_KEY_PEM = PRIVATE_KEY.private_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption()
+).decode('utf-8')
+
+print("[INIT] RSA keys generated successfully")
 
 def init_database():
     conn = sqlite3.connect('/app/data/oauth_ctf.db')
@@ -113,8 +143,18 @@ init_database()
 
 def is_ssrf_blocked(url):
     """
-    강화된 SSRF 필터 - 대부분의 우회 기법 차단
-    하지만 IPv6 full notation은 놓침 (의도된 취약점)
+    매우 강화된 SSRF 필터 - IPv6 Full Notation만 허용 (의도된 취약점)
+
+    차단되는 우회 기법:
+    - localhost, 127.0.0.1
+    - URL encoding (127%2e0%2e0%2e1, 127%2E0%2E0%2E1)
+    - Hex IP (0x7f000001, 0x7f.0.0.1, 0x7f.0x0.0x1)
+    - IPv6 축약형 (::1, ::ffff:127.0.0.1)
+    - Decimal IP (2130706433)
+    - Octal IP (0177.0.0.1)
+
+    허용되는 우회 기법 (의도된 취약점):
+    - IPv6 Full Notation: [0:0:0:0:0:0:0:1]
     """
     try:
         parsed = urlparse(url)
@@ -129,14 +169,27 @@ def is_ssrf_blocked(url):
         localhost_variants = [
             'localhost', 'localhost.localdomain',
             '127.0.0.1', '127.1', '127.0.1', '0.0.0.0',
-            '0', '0x7f000001', '0177.0.0.1', '2130706433',
-            '[::1]', '[::ffff:127.0.0.1]',  # IPv6 축약형만 차단!
+            '0', '2130706433',  # Decimal
+            '0177.0.0.1',  # Octal
+            '[::1]', '[::ffff:127.0.0.1]',  # IPv6 축약형
         ]
 
         if hostname_lower in localhost_variants:
             return True
 
-        # 2. 내부망 IP 대역 차단 (IPv4)
+        # 2. URL encoding 패턴 차단 (%2e, %2E 등)
+        if '%' in hostname:
+            return True
+
+        # 3. Hex IP 패턴 차단 (0x로 시작하는 모든 경우)
+        if '0x' in hostname_lower:
+            return True
+
+        # 4. 127.x.x.x 대역 전체 차단
+        if hostname_lower.startswith('127.'):
+            return True
+
+        # 5. 내부망 IP 대역 차단 (IPv4)
         private_ranges = [
             '192.168.', '10.', '172.16.', '172.17.', '172.18.', '172.19.',
             '172.20.', '172.21.', '172.22.', '172.23.', '172.24.', '172.25.',
@@ -148,11 +201,7 @@ def is_ssrf_blocked(url):
             if hostname_lower.startswith(prefix):
                 return True
 
-        # 3. 127.x.x.x 대역 전체 차단
-        if hostname_lower.startswith('127.'):
-            return True
-
-        # 4. IP 주소 파싱 및 검증
+        # 6. IP 주소 파싱 및 검증
         try:
             # 대괄호 제거 (IPv6용)
             clean_hostname = hostname.strip('[]')
@@ -164,19 +213,20 @@ def is_ssrf_blocked(url):
                     return True
 
             # IPv6 체크 (여기가 핵심 취약점!)
-            # 축약형 ::1은 위에서 문자열로 차단했지만
-            # 전체 표기 0:0:0:0:0:0:0:1은 정규화 후 체크를 놓침!
+            # 축약형 ::1은 위에서 문자열로 차단
+            # 하지만 Full Notation [0:0:0:0:0:0:0:1]은 is_loopback 체크를 안함!
             elif isinstance(ip, ipaddress.IPv6Address):
-                # 축약형만 차단하고 full notation은 놓침
-                if '::1' in hostname_lower or '::ffff:127' in hostname_lower:
+                # 축약형 명시적 차단
+                if '::' in hostname_lower:
                     return True
-                # 🔥 여기가 버그! ip.is_loopback 체크를 안함!
+                # 🔥 여기가 버그! Full notation은 is_loopback 체크를 안함!
+                # ip.is_loopback을 체크하지 않아서 [0:0:0:0:0:0:0:1]이 통과됨
 
         except ValueError:
             # IP가 아닌 도메인일 수 있음
             pass
 
-        # 5. auth-server, resource-server 등 내부 호스트명 차단
+        # 7. auth-server, resource-server 등 내부 호스트명 차단
         internal_hosts = ['auth-server', 'resource-server', 'client', 'nginx']
         if hostname_lower in internal_hosts:
             return True
@@ -409,30 +459,20 @@ def oauth_register():
         # SSRF 필터 적용
         if is_ssrf_blocked(logo_uri):
             return jsonify({
-                'error': 'ssrf_blocked',
-                'message': 'Access to localhost and private networks is blocked for security reasons',
-                'hint': 'Make sure your logo URL points to a public server',
-                'provided': logo_uri
+                'error': 'invalid_url',
+                'message': 'The provided URL is not allowed'
             }), 403
 
         try:
-            # IPv6 loopback을 IPv4로 변환 (Docker 환경에서 IPv6가 제대로 동작하지 않을 수 있음)
-            actual_uri = logo_uri
-            parsed = urlparse(logo_uri)
-            if parsed.hostname:
-                try:
-                    # IPv6 주소 파싱
-                    clean_hostname = parsed.hostname.strip('[]')
-                    ip = ipaddress.ip_address(clean_hostname)
-
-                    # IPv6 loopback이면 127.0.0.1로 변환
-                    if isinstance(ip, ipaddress.IPv6Address) and ip.is_loopback:
-                        actual_uri = logo_uri.replace(f'[{clean_hostname}]', '127.0.0.1')
-                except:
-                    pass
+            # IPv6 Full Notation을 localhost로 변환 (Docker 환경에서 자기 자신 접근)
+            # [0:0:0:0:0:0:0:1]:8000 -> localhost:8000
+            actual_request_url = logo_uri
+            if '[0:0:0:0:0:0:0:1]' in logo_uri:
+                actual_request_url = logo_uri.replace('[0:0:0:0:0:0:0:1]', 'localhost')
+                print(f"[SSRF] IPv6 Full Notation detected, converting to: {actual_request_url}")
 
             # 리다이렉트 차단
-            logo_response = requests.get(actual_uri, timeout=5, allow_redirects=False)
+            logo_response = requests.get(actual_request_url, timeout=5, allow_redirects=False)
             logo_fetch_result = {
                 'status': logo_response.status_code,
                 'content': logo_response.text[:1000]
@@ -1364,15 +1404,14 @@ def handle_authorization_code_grant(data):
     else:
         pass
 
-    # Generate tokens
+    # Generate tokens with scope filtering
+    # All users start with 'read' scope only
     requested_scope = grant_data['scope']
     user_id = grant_data['user_id']
 
-    allowed_scopes = ['read', 'write', 'openid']
-    scope_list = requested_scope.split()
-    filtered_scopes = [s for s in scope_list if s in allowed_scopes]
-    scope = ' '.join(filtered_scopes) if filtered_scopes else 'read'
-
+    # Initial authorization always grants 'read' scope only
+    # Users must use refresh token to escalate privileges
+    scope = 'read'
 
     access_token = generate_jwt_token(user_id, client_id, scope, 'access')
     refresh_token = f"refresh_{uuid.uuid4().hex}"
@@ -1483,33 +1522,92 @@ def handle_refresh_token_grant(data):
     finally:
         conn.close()
 
-    # Process scope request
-    original_scope = refresh_data['scope']
+    # 2-Stage Scope Escalation Logic
+    # Stage 1: read → write (all users allowed)
+    # Stage 2: write → ADMIN_SECRETS (admin users only)
 
-    if requested_scope:
-        # Update scope if requested
-        final_scope = requested_scope
-    else:
+    original_scope = refresh_data['scope']
+    user_id = refresh_data['user_id']
+
+    if not requested_scope:
+        return jsonify({
+            'error': 'invalid_request',
+            'error_description': 'scope parameter is required for token refresh',
+            'hint': 'Specify the scope you want to escalate to'
+        }), 400
+
+    requested_scopes = set(requested_scope.split())
+    current_scopes = set(original_scope.split())
+
+    # Determine the scope escalation path
+    # Check Stage 2 first (more specific condition)
+    if 'write' in current_scopes and 'ADMIN_SECRETS' in requested_scopes:
+        # Stage 2: write → ADMIN_SECRETS (admin only)
+        if user_id != 'user_admin_001':
+            return jsonify({
+                'error': 'access_denied',
+                'error_description': 'Insufficient privileges for requested scope'
+            }), 403
+
+        final_scope = 'read write ADMIN_SECRETS'
+
+    elif 'read' in current_scopes and 'write' in requested_scopes and 'ADMIN_SECRETS' not in requested_scopes:
+        # Stage 1: read → write (allowed for all users)
+        final_scope = 'read write'
+
+    elif requested_scopes == current_scopes:
+        # No escalation, just refresh
         final_scope = original_scope
 
-    # Generate new access token with escalated scope
-    user_id = refresh_data['user_id']
+    else:
+        # Invalid scope transition
+        return jsonify({
+            'error': 'invalid_scope',
+            'error_description': 'The requested scope is invalid or exceeds granted scope'
+        }), 400
+
+    # Update refresh token scope in database for future escalations
+    if final_scope != original_scope:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE refresh_tokens
+                SET scope = ?
+                WHERE token = ? AND client_id = ? AND user_id = ?
+            ''', (final_scope, refresh_token, client_id, user_id))
+            conn.commit()
+            print(f"[INFO] Updated refresh token scope: {original_scope} → {final_scope}")
+        except sqlite3.Error as e:
+            print(f"[ERROR] Failed to update refresh token scope: {e}")
+        finally:
+            conn.close()
+
+    # Generate new access token with escalated scope (RS256)
     new_access_token = generate_jwt_token(user_id, client_id, final_scope, 'access')
 
     response_data = {
         'access_token': new_access_token,
         'token_type': 'Bearer',
         'expires_in': 3600,
-        'scope': final_scope
+        'scope': final_scope,
+        'token_algorithm': 'RS256'
     }
 
     if 'ADMIN_SECRETS' in final_scope:
         response_data['admin_access'] = True
+        response_data['note'] = 'Token signed with RS256. Verify algorithm support on resource server.'
 
     return jsonify(response_data)
 
 
 def generate_jwt_token(user_id, client_id, scope, token_type):
+    """
+    Generate JWT token signed with RS256 algorithm
+
+    This creates a token signed with RSA private key.
+    The public key is exposed via /.well-known/jwks.json endpoint.
+    """
     now = datetime.utcnow()
 
     payload = {
@@ -1519,10 +1617,63 @@ def generate_jwt_token(user_id, client_id, scope, token_type):
         'exp': int((now + timedelta(hours=1)).timestamp()),
         'iat': int(now.timestamp()),
         'scope': scope,
-        'token_type': token_type
+        'token_type': token_type,
+        'client_id': client_id
     }
 
-    return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
+    # Sign with RS256 using private key
+    return jwt.encode(payload, PRIVATE_KEY_PEM, algorithm='RS256')
+
+
+@app.route('/.well-known/jwks.json')
+def jwks():
+    """
+    JSON Web Key Set (JWKS) endpoint
+
+    Exposes the public key used for RS256 JWT verification.
+    This is required for resource servers to verify tokens.
+
+    ⚠️ Security Note: This endpoint exposes the public key,
+    which can be used in JWT algorithm confusion attacks if
+    the resource server improperly handles algorithm verification.
+    """
+    try:
+        # Get public key numbers
+        public_numbers = PUBLIC_KEY.public_numbers()
+
+        # Convert to base64url encoding (without padding)
+        n = base64.urlsafe_b64encode(
+            public_numbers.n.to_bytes(256, byteorder='big')
+        ).decode('utf-8').rstrip('=')
+
+        e = base64.urlsafe_b64encode(
+            public_numbers.e.to_bytes(3, byteorder='big')
+        ).decode('utf-8').rstrip('=')
+
+        return jsonify({
+            "keys": [{
+                "kty": "RSA",
+                "use": "sig",
+                "alg": "RS256",
+                "kid": "oauth-ctf-2025-primary",
+                "n": n,
+                "e": e
+            }]
+        })
+    except Exception as e:
+        print(f"[ERROR] JWKS generation failed: {e}")
+        return jsonify({'error': 'Failed to generate JWKS'}), 500
+
+
+@app.route('/.well-known/public-key.pem')
+def public_key_pem():
+    """
+    Public key in PEM format
+
+    Provides the RSA public key in PEM format for easier integration.
+    This is the key that will be exploited in the algorithm confusion attack.
+    """
+    return Response(PUBLIC_KEY_PEM, mimetype='text/plain')
 
 
 @app.route('/.well-known/oauth-authorization-server')
@@ -1532,11 +1683,13 @@ def oauth_discovery():
         'authorization_endpoint': 'http://localhost:8000/oauth/authorize',
         'token_endpoint': 'http://localhost:8000/oauth/token',
         'registration_endpoint': 'http://localhost:8000/oauth/register',
+        'jwks_uri': 'http://localhost:8000/.well-known/jwks.json',
         'scopes_supported': OAUTH_CONFIG['supported_scopes'],
         'response_types_supported': OAUTH_CONFIG['supported_response_types'],
         'grant_types_supported': OAUTH_CONFIG['supported_grant_types'],
         'code_challenge_methods_supported': OAUTH_CONFIG['code_challenge_methods_supported'],
         'token_endpoint_auth_methods_supported': ['client_secret_post', 'client_secret_basic'],
+        'token_signing_alg_values_supported': ['RS256'],
         'service_topology': {
             'auth': 'auth-server:8000',
             'api': 'resource-server:8002'
@@ -1554,6 +1707,9 @@ Disallow: /internal/admin/
 # OAuth 2.0 Authorization Server
 # Internal admin endpoints are restricted
 # Dynamic client registration: /oauth/register
+
+# Note: Service topology information available at /.well-known/oauth-authorization-server
+# Network addressing may vary by protocol and representation
 """
     return Response(robots_content, mimetype='text/plain')
 

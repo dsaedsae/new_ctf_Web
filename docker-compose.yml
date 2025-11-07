@@ -62,7 +62,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - BASE_URL=${BASE_URL}
     networks:
-      - api-network  # Only api network - isolated from auth-network
+      - api-network
+      - auth-network  # Need access to auth-server for public key fetching
 
   # Nginx Reverse Proxy - Single Entry Point
   nginx:

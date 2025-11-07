@@ -40,8 +40,3 @@ logs/
 # OS
 Thumbs.db
 .DS_Store
-
-# CTF Solutions (DO NOT COMMIT!)
-WRITEUP*.md
-exploit.py
-solution*.py
