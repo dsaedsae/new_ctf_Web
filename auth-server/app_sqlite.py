@@ -459,9 +459,9 @@ def oauth_register():
         # SSRF 필터 적용
         if is_ssrf_blocked(logo_uri):
             return jsonify({
-                'error': 'invalid_url',
-                'message': 'The provided URL is not allowed'
-            }), 403
+                'error': 'invalid_logo_uri',
+                'error_description': 'Invalid URL format'
+            }), 400
 
         try:
             # IPv6 Full Notation을 localhost로 변환 (Docker 환경에서 자기 자신 접근)
@@ -1590,13 +1590,11 @@ def handle_refresh_token_grant(data):
         'access_token': new_access_token,
         'token_type': 'Bearer',
         'expires_in': 3600,
-        'scope': final_scope,
-        'token_algorithm': 'RS256'
+        'scope': final_scope
     }
 
     if 'ADMIN_SECRETS' in final_scope:
         response_data['admin_access'] = True
-        response_data['note'] = 'Token signed with RS256. Verify algorithm support on resource server.'
 
     return jsonify(response_data)
 
