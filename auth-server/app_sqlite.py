@@ -567,52 +567,6 @@ def internal_dev_config():
     return jsonify(config_data), 200, {'Content-Type': 'application/json'}
 
 
-@app.route('/oauth/client/<client_id>')
-def get_client_info(client_id):
-    # 사전 등록된 클라이언트 먼저 확인
-    if client_id in PREREGISTERED_CLIENTS:
-        client_data = PREREGISTERED_CLIENTS[client_id].copy()
-
-        # client_secret 제거 (보안상 노출 금지)
-        if 'client_secret' in client_data:
-            del client_data['client_secret']
-
-        client_data['created_at'] = '2024-01-01T00:00:00Z'
-        return jsonify(client_data)
-
-    # 데이터베이스에서 등록된 클라이언트 확인 (세션 필터 없음)
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute('''
-            SELECT * FROM oauth_clients
-            WHERE client_id = ?
-        ''', (client_id,))
-
-        result = cursor.fetchone()
-
-        if result:
-            client_data = {
-                'client_id': result['client_id'],
-                # client_secret은 보안상 노출하지 않음
-                'client_name': result['client_name'],
-                'logo_uri': result['logo_uri'],
-                'redirect_uris': json.loads(result['redirect_uris']),
-                'description': result['description'],
-                'created_at': result['created_at']
-            }
-            return jsonify(client_data)
-        else:
-            return jsonify({'error': 'Client not found'}), 404
-
-    except sqlite3.Error as e:
-        print(f"[ERROR] Database error: {e}")
-        return jsonify({'error': 'Database error'}), 500
-    finally:
-        conn.close()
-
-
 @app.route('/oauth/authorize')
 def oauth_authorize():
     # 파라미터 추출
@@ -1389,8 +1343,12 @@ def handle_authorization_code_grant(data):
                     'error_description': f'Single character code_verifier blocked: "{code_verifier}"'
                 }), 400
 
+            # Zero-width character only verifier 차단 (언인텐 방지)
             if code_verifier and all(c in zero_width_chars for c in code_verifier):
-                pass
+                return jsonify({
+                    'error': 'invalid_request',
+                    'error_description': 'Zero-width only code_verifier is not allowed'
+                }), 400
             elif code_verifier != code_challenge:
                 return jsonify({
                     'error': 'invalid_grant',
