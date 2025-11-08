@@ -21,18 +21,17 @@ import secrets
 JWT_SECRET = os.getenv('JWT_SECRET', secrets.token_urlsafe(64))
 ADMIN_FLAG = 'MSG{0auth_2_MSG_FLAG_m4st3r}'
 
-# Token signing secret for jti validation (shared with auth server)
+# jti 검증을 위한 토큰 서명 비밀키 (인증 서버와 공유)
 TOKEN_SIGNING_SECRET = os.getenv('TOKEN_SIGNING_SECRET', 'default_token_signing_secret_change_in_production')
 
-# Public key cache for RS256 verification
+# RS256 검증용 공개키 캐시
 PUBLIC_KEY_CACHE = None
 
 def get_public_key():
     """
-    Fetch public key from auth server's JWKS endpoint
+    인증 서버로부터 RS256 검증용 공개키를 가져옵니다.
 
-    This is required for RS256 token verification.
-    The public key is cached to avoid repeated requests.
+    최초 1회만 요청하고 이후에는 캐시된 값을 재사용합니다.
     """
     global PUBLIC_KEY_CACHE
 
@@ -45,10 +44,10 @@ def get_public_key():
 
         if response.status_code == 200:
             jwks = response.json()
-            # For simplicity, we'll fetch and cache the PEM from a direct endpoint
-            # In production, you'd convert JWK to PEM properly
+            # 간단하게 PEM 포맷 공개키를 직접 가져옴
+            # 실제 운영 환경에서는 JWK를 PEM으로 변환하는 것이 좋음
 
-            # Try to get PEM format directly
+            # PEM 포맷으로 직접 요청
             pem_response = requests.get('http://auth-server:8000/.well-known/public-key.pem', timeout=3)
             if pem_response.status_code == 200:
                 PUBLIC_KEY_CACHE = pem_response.text
@@ -65,25 +64,24 @@ def get_public_key():
 
 def verify_token(token):
     """
-    ⚠️ VULNERABLE JWT VERIFICATION - Algorithm Confusion Attack
+    JWT 알고리즘 혼동 취약점이 있는 토큰 검증 함수
 
-    This function trusts the 'alg' header from the JWT token,
-    allowing an attacker to switch from RS256 to HS256 and use
-    the public key as the HMAC secret.
+    토큰 헤더의 alg 값을 신뢰하여 검증 방식을 결정하므로,
+    공격자가 RS256 토큰을 HS256으로 변조할 수 있습니다.
 
-    Attack scenario:
-    1. Attacker obtains RS256-signed token
-    2. Downloads public key from /.well-known/jwks.json
-    3. Creates new token with alg=HS256
-    4. Signs with public key as HMAC secret
-    5. Server accepts the forged token
+    공격 흐름:
+    1. 정상 OAuth 플로우로 RS256 서명 토큰 획득
+    2. 공개키 다운로드 (/.well-known/public-key.pem)
+    3. 토큰 페이로드 복사 후 헤더를 alg=HS256으로 변경
+    4. 공개키를 HMAC 비밀키로 사용하여 서명
+    5. 서버가 변조된 토큰을 정상으로 인식
     """
     try:
-        # 🔥 VULNERABILITY: Trust the algorithm from token header
+        # 취약점: 토큰 헤더의 알고리즘을 신뢰
         header = jwt.get_unverified_header(token)
         algorithm = header.get('alg', 'RS256')
 
-        # Security: Block dangerous algorithms explicitly
+        # 보안: 위험한 알고리즘 명시적 차단
         algorithm_upper = algorithm.upper() if algorithm else ''
         if algorithm_upper in ['NONE', 'NULL', '']:
             return None, "Unsupported algorithm"
@@ -91,7 +89,7 @@ def verify_token(token):
         public_key = get_public_key()
 
         if algorithm == 'RS256':
-            # RS256: Verify with public key (correct)
+            # RS256: 공개키로 검증 (정상 동작)
             if not public_key:
                 return None, "Public key not available for RS256 verification"
 
@@ -103,24 +101,24 @@ def verify_token(token):
             )
 
         elif algorithm == 'HS256':
-            # 🔥 VULNERABILITY: Use public key as HMAC secret!
-            # This is the core of the algorithm confusion attack
+            # 취약점: 공개키를 HMAC 비밀키로 사용
+            # 알고리즘 혼동 공격의 핵심 포인트
             if not public_key:
                 return None, "Public key not available for HS256 verification"
 
-            # PyJWT blocks using public key as HMAC secret, so we need to verify manually
+            # PyJWT는 공개키를 HMAC 키로 사용하는 것을 차단하므로 수동 검증 필요
             import hmac
             import hashlib
             import base64
 
-            # Split token into parts
+            # 토큰을 헤더, 페이로드, 서명으로 분리
             parts = token.split('.')
             if len(parts) != 3:
                 return None, "Invalid token format"
 
             header_b64, payload_b64, signature_b64 = parts
 
-            # Verify signature manually using HMAC
+            # HMAC으로 서명 검증
             message = f"{header_b64}.{payload_b64}"
             expected_signature = hmac.new(
                 public_key.encode('utf-8'),
@@ -128,22 +126,22 @@ def verify_token(token):
                 hashlib.sha256
             ).digest()
 
-            # Decode the signature from token
-            # Add padding if needed for base64url decoding
+            # 토큰의 서명 디코딩
+            # base64url 디코딩을 위한 패딩 추가
             signature_b64_padded = signature_b64 + '=' * (4 - len(signature_b64) % 4)
             actual_signature = base64.urlsafe_b64decode(signature_b64_padded)
 
-            # Compare signatures
+            # 서명 비교
             if not hmac.compare_digest(expected_signature, actual_signature):
                 return None, "Invalid signature"
 
-            # Decode payload without signature verification (we already verified manually)
+            # 서명 검증은 이미 완료했으므로 페이로드만 디코딩
             payload = jwt.decode(
                 token,
                 options={"verify_signature": False, "verify_aud": False}
             )
 
-            # Manually verify expiration time
+            # 만료 시간 수동 검증
             import time
             exp = payload.get('exp')
             if exp and exp < time.time():
@@ -152,22 +150,22 @@ def verify_token(token):
         else:
             return None, f"Unsupported algorithm: {algorithm}"
 
-        # Verify jti (JWT ID) signature to prevent token forgery
+        # jti 서명 검증으로 임의 토큰 생성 방지
         jti_full = payload.get('jti', '')
         if not jti_full or '.' not in jti_full:
             return None, "Missing or invalid jti"
 
-        # Split jti and signature
+        # jti와 서명 분리
         jti, provided_signature = jti_full.rsplit('.', 1)
 
-        # Calculate expected signature
+        # 예상 서명 계산
         expected_signature = hmac.new(
             TOKEN_SIGNING_SECRET.encode('utf-8'),
             jti.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()[:16]
 
-        # Verify signature
+        # 서명 검증
         if not hmac.compare_digest(provided_signature, expected_signature):
             return None, "Token not issued by auth server"
 
@@ -197,7 +195,7 @@ def userinfo():
             'message': error
         }), 401
 
-    # Valid access token processing
+    # 유효한 액세스 토큰 처리
     token_type = payload.get('token_type', 'unknown')
     user_id = payload.get('sub')
     scope = payload.get('scope', '')
@@ -228,15 +226,15 @@ def check_rate_limit(ip_address, max_attempts=500, window=60):
 @app.route('/api/admin/flag')
 def admin_flag():
     """
-    ⚠️ Administrative endpoint with algorithm restriction
+    관리자 전용 엔드포인트 (알고리즘 제한 있음)
 
-    This endpoint only accepts HS256-signed tokens due to legacy
-    compatibility requirements with internal microservices.
+    내부 마이크로서비스와의 레거시 호환성을 위해
+    HS256 알고리즘으로 서명된 토큰만 허용합니다.
 
-    Requirements:
-    - HS256 algorithm
-    - ADMIN_SECRETS scope
-    - user_admin_001 user ID
+    필수 조건:
+    - 알고리즘: HS256
+    - 스코프: ADMIN_SECRETS
+    - 사용자 ID: user_admin_001
     """
     client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
     if not check_rate_limit(client_ip):
@@ -255,8 +253,8 @@ def admin_flag():
 
     token = auth_header.split(' ')[1]
 
-    # 🔥 CRITICAL: Check algorithm BEFORE verification
-    # This is the key constraint that forces the algorithm confusion attack
+    # 핵심: 검증 전에 알고리즘을 먼저 체크
+    # 이 제약 조건이 알고리즘 혼동 공격을 유도함
     try:
         header = jwt.get_unverified_header(token)
         algorithm = header.get('alg', 'unknown')
@@ -273,7 +271,7 @@ def admin_flag():
             'message': str(e)
         }), 400
 
-    # Now verify the token
+    # 이제 토큰 검증 수행
     payload, error = verify_token(token)
 
     if error:
@@ -298,7 +296,7 @@ def admin_flag():
             'message': 'Admin user account required'
         }), 403
 
-    # Success! Return administrative data
+    # 모든 검증 통과 - 관리자 데이터 반환
     return jsonify({
         'success': True,
         'message': 'Administrative access granted',
@@ -473,7 +471,7 @@ def index():
                 <p class="subtitle">OAuth 2.0 Protected Resource Server</p>
 
                 <div class="auth-notice">
-                    <strong>🔒 Authentication Required:</strong> All endpoints require valid Bearer tokens
+                    <strong> Authentication Required:</strong> All endpoints require valid Bearer tokens
                 </div>
 
                 <div class="endpoint">

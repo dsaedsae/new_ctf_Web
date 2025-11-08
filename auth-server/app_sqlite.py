@@ -18,7 +18,7 @@ import jwt
 from flask import Flask, request, jsonify, render_template_string, redirect, session, make_response, Response
 from flask_cors import CORS
 
-# RSA key generation for JWT Algorithm Confusion vulnerability
+# JWT 알고리즘 혼동 공격을 위한 RSA 키 생성
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
@@ -28,7 +28,7 @@ app = Flask(__name__)
 app.secret_key = 'oauth_ctf_advanced_2025_secret'
 CORS(app)
 
-# Token signing secret for jti validation (shared with resource server)
+# jti 검증을 위한 토큰 서명 비밀키 (리소스 서버와 공유)
 TOKEN_SIGNING_SECRET = os.getenv('TOKEN_SIGNING_SECRET', 'default_token_signing_secret_change_in_production')
 
 token_requests = defaultdict(list)
@@ -38,7 +38,7 @@ import secrets
 JWT_SECRET = os.getenv('JWT_SECRET', secrets.token_urlsafe(64))
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8080')
 
-# Generate RSA key pair for RS256 signing
+# RS256 서명용 RSA 키 쌍 생성
 print("[INIT] Generating RSA key pair for JWT signing...")
 PRIVATE_KEY = rsa.generate_private_key(
     public_exponent=65537,
@@ -48,7 +48,7 @@ PRIVATE_KEY = rsa.generate_private_key(
 
 PUBLIC_KEY = PRIVATE_KEY.public_key()
 
-# Convert to PEM format
+# PEM 포맷으로 변환
 PUBLIC_KEY_PEM = PUBLIC_KEY.public_bytes(
     encoding=serialization.Encoding.PEM,
     format=serialization.PublicFormat.SubjectPublicKeyInfo
@@ -143,7 +143,7 @@ def init_database():
     conn.commit()
     conn.close()
 
-# Initialize database
+# 데이터베이스 초기화
 init_database()
 
 def is_ssrf_blocked(url):
@@ -224,7 +224,7 @@ def is_ssrf_blocked(url):
                 # 축약형 명시적 차단
                 if '::' in hostname_lower:
                     return True
-                # 🔥 여기가 버그! Full notation은 is_loopback 체크를 안함!
+                # 여기가 버그! Full notation은 is_loopback 체크를 안함!
                 # ip.is_loopback을 체크하지 않아서 [0:0:0:0:0:0:0:1]이 통과됨
 
         except ValueError:
@@ -287,17 +287,17 @@ PREREGISTERED_CLIENTS = {
 
 def check_login_rate_limit(ip_address):
     now = time.time()
-    window = 300  # 5 minutes
-    max_attempts = 10  # 10 attempts per 5 minutes
+    window = 300  # 5분
+    max_attempts = 10  # 5분당 10회 시도
 
-    # Clean old attempts
+    # 오래된 시도 기록 삭제
     login_attempts[ip_address] = [t for t in login_attempts[ip_address] if now - t < window]
 
-    # Check limit
+    # 제한 확인
     if len(login_attempts[ip_address]) >= max_attempts:
         return False
 
-    # Record this attempt
+    # 현재 시도 기록
     login_attempts[ip_address].append(now)
     return True
 
@@ -415,7 +415,7 @@ def oauth_register():
 </head>
 <body>
     <div class="container">
-        <h1>🛠️ Register OAuth Client</h1>
+        <h1> Register OAuth Client</h1>
         <p class="subtitle">Register your application to use MSG.COM OAuth</p>
 
         <form method="POST">
@@ -456,7 +456,7 @@ def oauth_register():
     client_name = data.get('client_name')
     logo_uri = data.get('logo_uri', 'https://example.com/logo.png')
 
-    # Handle redirect_uris from both JSON (list) and form (string)
+    # redirect_uris를 JSON(리스트)과 폼(문자열) 모두 처리
     redirect_uris = data.get('redirect_uris', [])
     if isinstance(redirect_uris, str):
         redirect_uris = [uri.strip() for uri in redirect_uris.split('\n') if uri.strip()]
@@ -500,13 +500,13 @@ def oauth_register():
         except Exception as e:
             logo_fetch_result = {'error': str(e)}
 
-    # Session-based isolation for multi-user CTF environment
+    # 멀티 유저 CTF 환경을 위한 세션 격리
     if 'ctf_session_id' not in session:
         session['ctf_session_id'] = f"sess_{uuid.uuid4().hex[:16]}"
 
     session_id = session['ctf_session_id']
 
-    # Generate client credentials
+    # 클라이언트 인증 정보 생성
     client_id = f"client_{uuid.uuid4().hex[:16]}"
     client_secret = f"secret_{uuid.uuid4().hex[:24]}"
 
@@ -569,13 +569,13 @@ def internal_dev_config():
 
 @app.route('/oauth/client/<client_id>')
 def get_client_info(client_id):
-    # Check pre-registered clients first
+    # 사전 등록된 클라이언트 먼저 확인
     if client_id in PREREGISTERED_CLIENTS:
         client_data = PREREGISTERED_CLIENTS[client_id].copy()
         client_data['created_at'] = '2024-01-01T00:00:00Z'
         return jsonify(client_data)
 
-    # Check database for registered clients (no session filter)
+    # 데이터베이스에서 등록된 클라이언트 확인 (세션 필터 없음)
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -610,7 +610,7 @@ def get_client_info(client_id):
 
 @app.route('/oauth/authorize')
 def oauth_authorize():
-    # Extract parameters
+    # 파라미터 추출
     client_id = request.args.get('client_id')
     redirect_uri = request.args.get('redirect_uri')
     response_type = request.args.get('response_type', 'code')
@@ -622,12 +622,12 @@ def oauth_authorize():
     if not client_id or not redirect_uri:
         return jsonify({'error': 'invalid_request'}), 400
 
-    # Validate client (check pre-registered first)
+    # 클라이언트 검증 (사전 등록된 클라이언트 먼저 확인)
     if client_id in PREREGISTERED_CLIENTS:
         client_data = PREREGISTERED_CLIENTS[client_id]
         registered_uris = client_data['redirect_uris']
     else:
-        # Check database for registered clients
+        # 데이터베이스에서 등록된 클라이언트 확인
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -655,9 +655,9 @@ def oauth_authorize():
     if redirect_uri not in registered_uris:
         return jsonify({'error': 'invalid_redirect_uri'}), 400
 
-    # Check if user is already authenticated
+    # 사용자가 이미 인증되었는지 확인
     if 'user_id' not in session:
-        # Show login/consent page with improved UX
+        # 로그인/동의 페이지 표시
         return render_template_string('''
         <!DOCTYPE html>
         <html>
@@ -841,7 +841,7 @@ def oauth_authorize():
         <body>
             <div class="container">
                 <div class="content">
-                    <h2>🔐 OAuth Authorization</h2>
+                    <h2> OAuth Authorization</h2>
 
                     <div class="app-info">
                         <h3>{{ client_data.client_name }}</h3>
@@ -892,7 +892,7 @@ def oauth_authorize():
         response_type=response_type, scope=scope, state=state, 
         code_challenge=code_challenge, code_challenge_method=code_challenge_method)
 
-    # User is authenticated, generate authorization code
+    # 사용자 인증 완료, 인가 코드 생성
     auth_code = f"code_{uuid.uuid4().hex[:20]}"
     user_id = session['user_id']
     
@@ -907,17 +907,17 @@ def oauth_authorize():
         'created_at': datetime.now().isoformat()
     }
 
-    # Store authorization code in database
+    # 데이터베이스에 인가 코드 저장
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
         expires_at = datetime.now() + timedelta(minutes=10)
         cursor.execute('''
             INSERT INTO oauth_codes (code, client_id, user_id, redirect_uri, scope, code_challenge, code_challenge_method, expires_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (auth_code, client_id, user_id, redirect_uri, scope, code_challenge, code_challenge_method, expires_at))
-        
+
         conn.commit()
     except sqlite3.Error as e:
         print(f"[ERROR] Failed to store auth code: {e}")
@@ -925,7 +925,7 @@ def oauth_authorize():
     finally:
         conn.close()
 
-    # Redirect back to client with authorization code
+    # 인가 코드와 함께 클라이언트로 리다이렉트
     redirect_params = {
         'code': auth_code,
         'state': state
@@ -942,35 +942,35 @@ def oauth_authorize_post():
         return jsonify({'error': 'access_denied'}), 400
 
     if action == 'login':
-        # Get username and password from form
+        # 폼에서 사용자명과 비밀번호 가져오기
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
-        client_id = request.form.get('client_id')  # Get client_id for trust check
+        client_id = request.form.get('client_id')  # 신뢰 클라이언트 체크용
 
 
-        # Validate credentials
+        # 자격 증명 검증
         if username and password:
             client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
             if ',' in client_ip:
                 client_ip = client_ip.split(',')[0].strip()
             user_data = validate_user_simple(username, password, client_ip)
-            
+
             if user_data:
-                # Set session with consistent user_id
+                # 일관된 user_id로 세션 설정
                 session['user_id'] = user_data['user_id']
                 session['username'] = username
                 session['role'] = user_data['role']
 
-                # Redirect back to GET with same parameters
+                # 같은 파라미터로 GET으로 리다이렉트
                 params = request.form.to_dict()
-                params.pop('action', None)  # Remove action parameter
-                params.pop('username', None)  # Remove username
-                params.pop('password', None)  # Remove password
+                params.pop('action', None)  # action 파라미터 제거
+                params.pop('username', None)  # username 제거
+                params.pop('password', None)  # password 제거
 
                 redirect_url = f"/oauth/authorize?{urlencode(params)}"
                 return redirect(redirect_url)
             else:
-                # Invalid credentials
+                # 잘못된 자격 증명
                 return render_template_string('''
                 <!DOCTYPE html>
                 <html>
@@ -1083,7 +1083,7 @@ def oauth_authorize_post():
                 </html>
                 ''')
         else:
-            # Empty username/password
+            # 사용자명 또는 비밀번호가 비어있음
             return render_template_string('''
             <!DOCTYPE html>
             <html>
@@ -1183,28 +1183,28 @@ def oauth_authorize_post():
 def check_token_rate_limit():
     client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
 
-    # Take first IP if multiple
+    # 여러 IP가 있으면 첫 번째만 사용
     if ',' in client_ip:
         client_ip = client_ip.split(',')[0].strip()
 
     now = time.time()
-    window = 60  # 1 minute
-    max_requests = 5  # 5 requests per minute (strict)
+    window = 60  # 1분
+    max_requests = 5  # 분당 5회 요청 (엄격)
 
-    # Clean old requests
+    # 오래된 요청 기록 삭제
     token_requests[client_ip] = [t for t in token_requests[client_ip] if now - t < window]
 
-    # Check limit
+    # 제한 확인
     if len(token_requests[client_ip]) >= max_requests:
         return False, client_ip
 
-    # Record this request
+    # 현재 요청 기록
     token_requests[client_ip].append(now)
     return True, client_ip
 
 @app.route('/oauth/token', methods=['POST'])
 def oauth_token():
-    # Check rate limit
+    # 요청 속도 제한 확인
     allowed, client_ip = check_token_rate_limit()
     if not allowed:
         return jsonify({
@@ -1234,12 +1234,12 @@ def handle_authorization_code_grant(data):
     if not all([client_id, client_secret, code, redirect_uri]):
         return jsonify({'error': 'invalid_request'}), 400
 
-    # Validate client credentials (check pre-registered first)
+    # 클라이언트 자격 증명 검증 (사전 등록된 클라이언트 먼저 확인)
     if client_id in PREREGISTERED_CLIENTS:
         client_data = PREREGISTERED_CLIENTS[client_id]
         expected_secret = client_data['client_secret']
     else:
-        # Check database for registered clients
+        # 데이터베이스에서 등록된 클라이언트 확인
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -1266,31 +1266,31 @@ def handle_authorization_code_grant(data):
     if expected_secret != client_secret:
         return jsonify({'error': 'invalid_client'}), 401
 
-    # Validate authorization code from database
+    # 데이터베이스에서 인가 코드 검증
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
         cursor.execute('''
             SELECT client_id, user_id, redirect_uri, scope, code_challenge, code_challenge_method, expires_at
             FROM oauth_codes WHERE code = ?
         ''', (code,))
-        
+
         result = cursor.fetchone()
-        
+
         if not result:
             return jsonify({'error': 'invalid_grant'}), 400
-        
-        # Check expiration
+
+        # 만료 확인
         expires_at = datetime.fromisoformat(result['expires_at'])
         if datetime.now() > expires_at:
             return jsonify({'error': 'invalid_grant'}), 400
-        
-        # Validate client and redirect URI
+
+        # 클라이언트 및 리다이렉트 URI 검증
         if result['client_id'] != client_id or result['redirect_uri'] != redirect_uri:
             return jsonify({'error': 'invalid_grant'}), 400
-        
-        # Delete used authorization code
+
+        # 사용된 인가 코드 삭제
         cursor.execute('DELETE FROM oauth_codes WHERE code = ?', (code,))
         conn.commit()
         
@@ -1423,19 +1423,19 @@ def handle_authorization_code_grant(data):
     else:
         pass
 
-    # Generate tokens with scope filtering
-    # All users start with 'read' scope only
+    # 스코프 필터링을 적용하여 토큰 생성
+    # 모든 사용자는 'read' 스코프로만 시작
     requested_scope = grant_data['scope']
     user_id = grant_data['user_id']
 
-    # Initial authorization always grants 'read' scope only
-    # Users must use refresh token to escalate privileges
+    # 초기 인가는 항상 'read' 스코프만 부여
+    # 사용자는 refresh token을 사용하여 권한을 상승시켜야 함
     scope = 'read'
 
     access_token = generate_jwt_token(user_id, client_id, scope, 'access')
     refresh_token = f"refresh_{uuid.uuid4().hex}"
 
-    # Store refresh token in database
+    # 데이터베이스에 refresh token 저장
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -1473,12 +1473,12 @@ def handle_refresh_token_grant(data):
     if not all([client_id, client_secret, refresh_token]):
         return jsonify({'error': 'invalid_request'}), 400
 
-    # Validate client (check pre-registered first)
+    # 클라이언트 검증 (사전 등록된 클라이언트 먼저 확인)
     if client_id in PREREGISTERED_CLIENTS:
         client_data = PREREGISTERED_CLIENTS[client_id]
         expected_secret = client_data['client_secret']
     else:
-        # Check database for registered clients
+        # 데이터베이스에서 등록된 클라이언트 확인
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -1505,27 +1505,27 @@ def handle_refresh_token_grant(data):
     if expected_secret != client_secret:
         return jsonify({'error': 'invalid_client'}), 401
 
-    # Validate refresh token from database
+    # 데이터베이스에서 refresh token 검증
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
         cursor.execute('''
             SELECT client_id, user_id, scope, expires_at
             FROM refresh_tokens WHERE token = ?
         ''', (refresh_token,))
-        
+
         result = cursor.fetchone()
-        
+
         if not result:
             return jsonify({'error': 'invalid_grant'}), 400
-        
-        # Check expiration
+
+        # 만료 확인
         expires_at = datetime.fromisoformat(result['expires_at'])
         if datetime.now() > expires_at:
             return jsonify({'error': 'invalid_grant'}), 400
-        
-        # Validate client
+
+        # 클라이언트 검증
         if result['client_id'] != client_id:
             return jsonify({'error': 'invalid_grant'}), 400
         
@@ -1541,9 +1541,9 @@ def handle_refresh_token_grant(data):
     finally:
         conn.close()
 
-    # 2-Stage Scope Escalation Logic
-    # Stage 1: read → write (all users allowed)
-    # Stage 2: write → ADMIN_SECRETS (admin users only)
+    # 2단계 스코프 권한 상승 로직
+    # 1단계: read → write (모든 사용자 허용)
+    # 2단계: write → ADMIN_SECRETS (관리자만 허용)
 
     original_scope = refresh_data['scope']
     user_id = refresh_data['user_id']
@@ -1558,10 +1558,10 @@ def handle_refresh_token_grant(data):
     requested_scopes = set(requested_scope.split())
     current_scopes = set(original_scope.split())
 
-    # Determine the scope escalation path
-    # Check Stage 2 first (more specific condition)
+    # 스코프 권한 상승 경로 결정
+    # 2단계를 먼저 확인 (더 구체적인 조건)
     if 'write' in current_scopes and 'ADMIN_SECRETS' in requested_scopes:
-        # Stage 2: write → ADMIN_SECRETS (admin only)
+        # 2단계: write → ADMIN_SECRETS (관리자만 허용)
         if user_id != 'user_admin_001':
             return jsonify({
                 'error': 'access_denied',
@@ -1571,21 +1571,21 @@ def handle_refresh_token_grant(data):
         final_scope = 'read write ADMIN_SECRETS'
 
     elif 'read' in current_scopes and 'write' in requested_scopes and 'ADMIN_SECRETS' not in requested_scopes:
-        # Stage 1: read → write (allowed for all users)
+        # 1단계: read → write (모든 사용자 허용)
         final_scope = 'read write'
 
     elif requested_scopes == current_scopes:
-        # No escalation, just refresh
+        # 권한 상승 없이 갱신만
         final_scope = original_scope
 
     else:
-        # Invalid scope transition
+        # 잘못된 스코프 전환
         return jsonify({
             'error': 'invalid_scope',
             'error_description': 'The requested scope is invalid or exceeds granted scope'
         }), 400
 
-    # Update refresh token scope in database for future escalations
+    # 향후 권한 상승을 위해 데이터베이스의 refresh token 스코프 업데이트
     if final_scope != original_scope:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1602,7 +1602,7 @@ def handle_refresh_token_grant(data):
         finally:
             conn.close()
 
-    # Generate new access token with escalated scope (RS256)
+    # 상승된 스코프로 새로운 액세스 토큰 생성 (RS256)
     new_access_token = generate_jwt_token(user_id, client_id, final_scope, 'access')
 
     response_data = {
@@ -1620,26 +1620,26 @@ def handle_refresh_token_grant(data):
 
 def generate_jwt_token(user_id, client_id, scope, token_type):
     """
-    Generate JWT token signed with RS256 algorithm
+    RS256 알고리즘으로 서명된 JWT 토큰 생성
 
-    This creates a token signed with RSA private key.
-    The public key is exposed via /.well-known/jwks.json endpoint.
+    RSA 개인키로 서명된 토큰을 생성합니다.
+    공개키는 /.well-known/jwks.json 엔드포인트를 통해 노출됩니다.
 
-    jti (JWT ID) is added with HMAC signature to prevent token forgery.
+    jti(JWT ID)는 HMAC 서명과 함께 추가되어 임의 토큰 생성을 방지합니다.
     """
     now = datetime.utcnow()
 
-    # Generate unique token ID (jti)
+    # 고유한 토큰 ID (jti) 생성
     jti = secrets.token_urlsafe(32)
 
-    # Sign jti with shared secret (prevents arbitrary token creation)
+    # 공유 비밀키로 jti에 서명 (임의 토큰 생성 방지)
     jti_signature = hmac.new(
         TOKEN_SIGNING_SECRET.encode('utf-8'),
         jti.encode('utf-8'),
         hashlib.sha256
     ).hexdigest()[:16]
 
-    # Combine jti and signature
+    # jti와 서명 결합
     jti_with_signature = f"{jti}.{jti_signature}"
 
     payload = {
@@ -1654,7 +1654,7 @@ def generate_jwt_token(user_id, client_id, scope, token_type):
         'jti': jti_with_signature
     }
 
-    # Sign with RS256 using private key
+    # 개인키로 RS256 서명
     return jwt.encode(payload, PRIVATE_KEY_PEM, algorithm='RS256')
 
 
@@ -1666,15 +1666,15 @@ def jwks():
     Exposes the public key used for RS256 JWT verification.
     This is required for resource servers to verify tokens.
 
-    ⚠️ Security Note: This endpoint exposes the public key,
+    Security Note: This endpoint exposes the public key,
     which can be used in JWT algorithm confusion attacks if
     the resource server improperly handles algorithm verification.
     """
     try:
-        # Get public key numbers
+        # 공개키 숫자 가져오기
         public_numbers = PUBLIC_KEY.public_numbers()
 
-        # Convert to base64url encoding (without padding)
+        # base64url 인코딩으로 변환 (패딩 제거)
         n = base64.urlsafe_b64encode(
             public_numbers.n.to_bytes(256, byteorder='big')
         ).decode('utf-8').rstrip('=')
@@ -1737,12 +1737,12 @@ def robots():
     robots_content = """User-agent: *
 Disallow: /internal/admin/
 
-# OAuth 2.0 Authorization Server
-# Internal admin endpoints are restricted
-# Dynamic client registration: /oauth/register
+# OAuth 2.0 인증 서버
+# 내부 관리자 엔드포인트는 접근 제한됨
+# 동적 클라이언트 등록: /oauth/register
 
-# Note: Service topology information available at /.well-known/oauth-authorization-server
-# Network addressing may vary by protocol and representation
+# 참고: 서비스 구조 정보는 /.well-known/oauth-authorization-server에서 확인 가능
+# 네트워크 주소는 프로토콜과 표현 방식에 따라 다를 수 있음
 """
     return Response(robots_content, mimetype='text/plain')
 
