@@ -1545,7 +1545,9 @@ def handle_refresh_token_grant(data):
         # 잘못된 스코프 전환
         return jsonify({
             'error': 'invalid_scope',
-            'error_description': 'The requested scope is invalid or exceeds granted scope'
+            'error_description': 'The requested scope is invalid or exceeds granted scope',
+            'current_scope': original_scope,
+            'hint': 'Scope escalation must be incremental'
         }), 400
 
     # 향후 권한 상승을 위해 데이터베이스의 refresh token 스코프 업데이트
@@ -1685,13 +1687,7 @@ def oauth_discovery():
         'grant_types_supported': OAUTH_CONFIG['supported_grant_types'],
         'code_challenge_methods_supported': OAUTH_CONFIG['code_challenge_methods_supported'],
         'token_endpoint_auth_methods_supported': ['client_secret_post', 'client_secret_basic'],
-        'token_signing_alg_values_supported': ['RS256'],
-        'service_topology': {
-            'auth': 'auth-server:8000',
-            'api': 'resource-server:8002'
-        },
-        'internal_documentation': '/internal/admin/',
-        'debug_mode': 'development'
+        'token_signing_alg_values_supported': ['RS256']
     })
 
 
@@ -1700,12 +1696,8 @@ def robots():
     robots_content = """User-agent: *
 Disallow: /internal/admin/
 
-# OAuth 2.0 인증 서버
-# 내부 관리자 엔드포인트는 접근 제한됨
-# 동적 클라이언트 등록: /oauth/register
-
-# 참고: 서비스 구조 정보는 /.well-known/oauth-authorization-server에서 확인 가능
-# 네트워크 주소는 프로토콜과 표현 방식에 따라 다를 수 있음
+# OAuth 2.0 Authorization Server
+# Dynamic Client Registration: /oauth/register
 """
     return Response(robots_content, mimetype='text/plain')
 
@@ -1716,8 +1708,6 @@ def index():
     <html>
     <head>
         <title>MSG.COM OAuth Platform</title>
-        <!-- DEV NOTE: Test credentials stored in /internal/admin/dev-config.json -->
-        <!-- TODO: Remove this endpoint before production deployment! -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
