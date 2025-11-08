@@ -5,6 +5,8 @@ import json
 import time
 import uuid
 import hashlib
+import hmac
+import secrets
 import requests
 import sqlite3
 import ipaddress
@@ -25,6 +27,9 @@ import base64
 app = Flask(__name__)
 app.secret_key = 'oauth_ctf_advanced_2025_secret'
 CORS(app)
+
+# Token signing secret for jti validation (shared with resource server)
+TOKEN_SIGNING_SECRET = os.getenv('TOKEN_SIGNING_SECRET', 'default_token_signing_secret_change_in_production')
 
 token_requests = defaultdict(list)
 login_attempts = defaultdict(list)
@@ -226,7 +231,21 @@ def is_ssrf_blocked(url):
             # IP가 아닌 도메인일 수 있음
             pass
 
-        # 7. auth-server, resource-server 등 내부 호스트명 차단
+        # 7. 포트 기반 필터링 (언인텐 방지)
+        # 내부 포트 8000으로의 접근은 /internal/admin/ 경로만 허용
+        port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+        path = parsed.path or '/'
+
+        if port == 8000:
+            # Path traversal 차단 (.., ./ 등)
+            if '..' in path or path != path.replace('//', '/'):
+                return True
+
+            # /internal/admin/ 경로만 허용 (의도된 SSRF)
+            if not path.startswith('/internal/admin/'):
+                return True
+
+        # 8. auth-server, resource-server 등 내부 호스트명 차단
         internal_hosts = ['auth-server', 'resource-server', 'client', 'nginx']
         if hostname_lower in internal_hosts:
             return True
@@ -1605,8 +1624,23 @@ def generate_jwt_token(user_id, client_id, scope, token_type):
 
     This creates a token signed with RSA private key.
     The public key is exposed via /.well-known/jwks.json endpoint.
+
+    jti (JWT ID) is added with HMAC signature to prevent token forgery.
     """
     now = datetime.utcnow()
+
+    # Generate unique token ID (jti)
+    jti = secrets.token_urlsafe(32)
+
+    # Sign jti with shared secret (prevents arbitrary token creation)
+    jti_signature = hmac.new(
+        TOKEN_SIGNING_SECRET.encode('utf-8'),
+        jti.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()[:16]
+
+    # Combine jti and signature
+    jti_with_signature = f"{jti}.{jti_signature}"
 
     payload = {
         'iss': 'https://auth.oauth-ctf.local',
@@ -1616,7 +1650,8 @@ def generate_jwt_token(user_id, client_id, scope, token_type):
         'iat': int(now.timestamp()),
         'scope': scope,
         'token_type': token_type,
-        'client_id': client_id
+        'client_id': client_id,
+        'jti': jti_with_signature
     }
 
     # Sign with RS256 using private key

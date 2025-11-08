@@ -3,6 +3,8 @@
 import os
 import json
 import jwt
+import hmac
+import hashlib
 import requests
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template_string
@@ -18,6 +20,9 @@ admin_attempts = defaultdict(list)
 import secrets
 JWT_SECRET = os.getenv('JWT_SECRET', secrets.token_urlsafe(64))
 ADMIN_FLAG = 'MSG{0auth_2_MSG_FLAG_m4st3r}'
+
+# Token signing secret for jti validation (shared with auth server)
+TOKEN_SIGNING_SECRET = os.getenv('TOKEN_SIGNING_SECRET', 'default_token_signing_secret_change_in_production')
 
 # Public key cache for RS256 verification
 PUBLIC_KEY_CACHE = None
@@ -78,6 +83,11 @@ def verify_token(token):
         header = jwt.get_unverified_header(token)
         algorithm = header.get('alg', 'RS256')
 
+        # Security: Block dangerous algorithms explicitly
+        algorithm_upper = algorithm.upper() if algorithm else ''
+        if algorithm_upper in ['NONE', 'NULL', '']:
+            return None, "Unsupported algorithm"
+
         public_key = get_public_key()
 
         if algorithm == 'RS256':
@@ -127,14 +137,39 @@ def verify_token(token):
             if not hmac.compare_digest(expected_signature, actual_signature):
                 return None, "Invalid signature"
 
-            # Decode payload without verification (we already verified manually)
+            # Decode payload without signature verification (we already verified manually)
             payload = jwt.decode(
                 token,
                 options={"verify_signature": False, "verify_aud": False}
             )
 
+            # Manually verify expiration time
+            import time
+            exp = payload.get('exp')
+            if exp and exp < time.time():
+                return None, "Token has expired"
+
         else:
             return None, f"Unsupported algorithm: {algorithm}"
+
+        # Verify jti (JWT ID) signature to prevent token forgery
+        jti_full = payload.get('jti', '')
+        if not jti_full or '.' not in jti_full:
+            return None, "Missing or invalid jti"
+
+        # Split jti and signature
+        jti, provided_signature = jti_full.rsplit('.', 1)
+
+        # Calculate expected signature
+        expected_signature = hmac.new(
+            TOKEN_SIGNING_SECRET.encode('utf-8'),
+            jti.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()[:16]
+
+        # Verify signature
+        if not hmac.compare_digest(provided_signature, expected_signature):
+            return None, "Token not issued by auth server"
 
         return payload, None
 
