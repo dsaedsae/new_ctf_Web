@@ -572,6 +572,11 @@ def get_client_info(client_id):
     # 사전 등록된 클라이언트 먼저 확인
     if client_id in PREREGISTERED_CLIENTS:
         client_data = PREREGISTERED_CLIENTS[client_id].copy()
+
+        # client_secret 제거 (보안상 노출 금지)
+        if 'client_secret' in client_data:
+            del client_data['client_secret']
+
         client_data['created_at'] = '2024-01-01T00:00:00Z'
         return jsonify(client_data)
 
@@ -590,7 +595,7 @@ def get_client_info(client_id):
         if result:
             client_data = {
                 'client_id': result['client_id'],
-                'client_secret': result['client_secret'],
+                # client_secret은 보안상 노출하지 않음
                 'client_name': result['client_name'],
                 'logo_uri': result['logo_uri'],
                 'redirect_uris': json.loads(result['redirect_uris']),
